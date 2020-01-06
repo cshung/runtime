@@ -2844,6 +2844,18 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
         }
     }
 
+    // Uncomment this to show the method full name 
+    // printf("%s\n", info.compFullName);
+    
+    if (strcmp("", info.compFullName) == 0)
+    {
+        // This will cause the compiler to spill a lot of debug logs
+        // In various places, we can condition on this variable and call AndrewBreak()
+        verboseDump = true;
+    }
+
+    // Feel free to check for more method
+
     if (verboseDump)
     {
         verbose = true;
