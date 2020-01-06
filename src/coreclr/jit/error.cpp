@@ -359,12 +359,28 @@ int flogf(FILE* file, const char* fmt, ...)
     va_end(args);
     return written;
 }
+void AndrewBreak()
+{
+
+}
+
+void logf2(const char* fmt, ...)
+{
+    va_list     args;
+    va_start(args, fmt);
+    if (!vflogf(jitstdout, fmt, args))
+    {
+        // logToEEfailed = true;
+    }
+    va_end(args);
+}
 
 /*********************************************************************/
 int logf(const char* fmt, ...)
 {
     va_list     args;
     static bool logToEEfailed = false;
+    static int count = 0;
     int         written       = 0;
     //
     // We remember when the EE failed to log, because vlogf()
@@ -376,6 +392,7 @@ int logf(const char* fmt, ...)
     if (!logToEEfailed)
     {
         va_start(args, fmt);
+        
         if (!vlogf(LL_INFO1000, fmt, args))
         {
             logToEEfailed = true;
@@ -385,6 +402,16 @@ int logf(const char* fmt, ...)
 
     if (logToEEfailed)
     {
+        // The idea is to give every print an identity
+        // To read the garbled log, use this regex and replace it to nothing
+        // \nc7fad2e8-121f-4c7a-ba9c-96df60080bdc [0-9]+\n
+        logf2("\nc7fad2e8-121f-4c7a-ba9c-96df60080bdc %d\n", ++count);
+        if (count == -1)
+        {
+            // So that we can break right at the point when it prints
+            AndrewBreak();
+        }
+
         // if the EE refuses to log it, we try to send it to stdout
         va_start(args, fmt);
         written = vflogf(jitstdout, fmt, args);
