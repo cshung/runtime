@@ -44,6 +44,56 @@ namespace R2RDump
                 {
                     writer.WriteLine($"IL Offset: 0x{theThis.BoundsList[i].ILOffset:x4}, Source Types: {theThis.BoundsList[i].SourceTypes}");
                 }
+                if (i > 0)
+                {
+                    uint nocode = unchecked((uint)-1);
+                    uint prolog = unchecked((uint)-2);
+                    uint epilog = unchecked((uint)-3);
+
+                    uint previousILOffset = theThis.BoundsList[i - 1].ILOffset;
+                    uint currentILOffset = theThis.BoundsList[i].ILOffset;
+                    uint previousNativeOffset = theThis.BoundsList[i - 1].NativeOffset;
+                    uint currentNativeOffset = theThis.BoundsList[i].NativeOffset;
+
+                    if (currentNativeOffset == previousNativeOffset)
+                    {
+                        if (currentILOffset == previousILOffset)
+                        {
+                            // Why are emitting exactly the same mapping more than once?
+                            writer.WriteLine("Ooops1");
+                        }
+                        else
+                        {
+                            // This is even more weird, why would one native offset means more than one ILOffset?
+                            writer.WriteLine("Ooops2");
+                        }
+                    }
+                    else if (currentNativeOffset < previousNativeOffset)
+                    {
+                        // This is not happening, the array seems to be sorted by native offset
+                        writer.WriteLine("Ooops3");
+                    }
+                    else
+                    {
+                        if (currentILOffset != nocode && currentILOffset != prolog && currentILOffset != epilog)
+                        {
+                            if (previousILOffset != nocode && previousILOffset != prolog && previousILOffset != epilog)
+                            {
+                                if (currentILOffset == previousILOffset)
+                                {
+                                    // Why would two distinct native offset correspond to the same ILOffset?
+                                    writer.WriteLine("Ooops4");
+                                }
+                                else if (currentILOffset < previousILOffset)
+                                {
+                                    // The JIT rearranged stuff so that latter IL instruction is executed earlier,
+                                    // this is probably fine
+                                    writer.WriteLine("Ooops5");
+                                }
+                            }
+                        }
+                    }
+                }
             }
             writer.WriteLine("");
 
