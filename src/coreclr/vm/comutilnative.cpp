@@ -1361,6 +1361,7 @@ void GCInterface::AddMemoryPressure(UINT64 bytesAllocated)
     }
     CONTRACTL_END;
 
+    /*
     CheckCollectionCount();
 
     UINT p = m_iteration % MEM_PRESSURE_COUNT;
@@ -1424,6 +1425,8 @@ void GCInterface::AddMemoryPressure(UINT64 bytesAllocated)
             }
         }
     }
+    */
+    GCHeapUtilities::GetGCHeap()->Trampoline();
 }
 
 void QCALLTYPE GCInterface::_RemoveMemoryPressure(UINT64 bytesAllocated)

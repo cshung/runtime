@@ -1,0 +1,3 @@
+[submodule "StringDedupAnalyzer"]
+	path = StringDedupAnalyzer
+	url = git@github.com:cshung/StringDedupAnalyzer.git

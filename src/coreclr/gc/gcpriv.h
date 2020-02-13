@@ -1133,6 +1133,11 @@ enum interesting_data_point
 //class definition of the internal class
 class gc_heap
 {
+public:
+    void andrew();
+    void andrew1(uint8_t*** hash_table, uint8_t** ref);
+    void andrew2();
+private:
     friend class GCHeap;
 #ifdef FEATURE_PREMORTEM_FINALIZATION
     friend class CFinalize;

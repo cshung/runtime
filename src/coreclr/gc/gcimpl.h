@@ -43,6 +43,8 @@ extern VOLATILE(int32_t) g_no_gc_lock;
 
 class GCHeap : public IGCHeapInternal
 {
+public:
+    void Trampoline();
 protected:
 
 #ifdef MULTIPLE_HEAPS

@@ -1,29 +1,3 @@
-project(clrgcsample)
-
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-
-include_directories(..)
-include_directories(../env)
-
-set(SOURCES
-    GCSample.cpp
-    gcenv.ee.cpp
-    ../gceventstatus.cpp
-    ../gcconfig.cpp
-    ../gccommon.cpp
-    ../gceewks.cpp
-    ../gchandletable.cpp
-    ../gcscan.cpp
-    ../gcwks.cpp
-    ../gcload.cpp
-    ../handletable.cpp
-    ../handletablecache.cpp
-    ../handletablecore.cpp
-    ../handletablescan.cpp
-    ../objecthandle.cpp
-    ../softwarewritewatch.cpp
-)
-
 if (CLR_CMAKE_TARGET_ARCH_AMD64 AND CLR_CMAKE_TARGET_WIN32)
   set ( SOURCES
     ${SOURCES}
@@ -39,29 +13,5 @@ if (CLR_CMAKE_TARGET_ARCH_AMD64 AND CLR_CMAKE_TARGET_WIN32)
 )
 endif (CLR_CMAKE_TARGET_ARCH_AMD64 AND CLR_CMAKE_TARGET_WIN32)
 
-if(CLR_CMAKE_TARGET_WIN32)
-  set (GC_LINK_LIBRARIES
-    ${STATIC_MT_CRT_LIB}
-    ${STATIC_MT_VCRT_LIB}
-    kernel32.lib
-    advapi32.lib)
-endif(CLR_CMAKE_TARGET_WIN32)
-
 add_definitions(-DVERIFY_HEAP)
 
-if(CLR_CMAKE_TARGET_WIN32)
-    list(APPEND SOURCES
-        ../windows/gcenv.windows.cpp)
-    add_definitions(-DUNICODE)
-else()
-    list(APPEND SOURCES
-        ../gcenv.unix.cpp)
-endif()
-
-_add_executable(gcsample
-    ${SOURCES}
-)
-
-if(CLR_CMAKE_TARGET_WIN32)
-    target_link_libraries(gcsample ${GC_LINK_LIBRARIES})
-endif()

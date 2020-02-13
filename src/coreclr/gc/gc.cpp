@@ -23,6 +23,10 @@
 #else
 #define USE_INTROSORT
 #endif
+void andrew_break()
+{
+
+}
 
 // We just needed a simple random number generator for testing.
 class gc_rand
@@ -41119,6 +41123,11 @@ GCHeap::Alloc(gc_alloc_context* context, size_t size, uint32_t flags REQD_ALIGN_
     return newAlloc;
 }
 
+void GCHeap::Trampoline()
+{
+    pGenGCHeap->andrew();
+}
+
 void
 GCHeap::FixAllocContext (gc_alloc_context* context, void* arg, void *heap)
 {
@@ -43815,3 +43824,105 @@ void PopulateDacVars(GcDacVars *gcDacVars)
     UNREFERENCED_PARAMETER(gcDacVars);
 #endif // DACCESS_COMPILE
 }
+
+#if defined(BUILD_AS_STANDALONE)
+void gc_heap::andrew()
+{
+    // GcSample isn't happen with it too :(
+    // Need to access to string method table and access string content
+}
+#else
+// the macro making debugging difficult, so just pull this out as a separate function
+void gc_heap::andrew1(uint8_t*** hash_table, uint8_t** ref)
+{
+    if (*ref)
+    {
+        if (!ephemeral_pointer_p (*ref))
+        {
+            Object* walkingObject = (Object*)(*ref);
+            // wprintf(L"I have a reference at %p to %p\n", ref, *ref);
+            if (walkingObject->GetGCSafeMethodTable() == g_pStringClass)
+            {
+                StringObject* walkingString = (StringObject*)walkingObject;
+                int hash = 0;
+                for (WCHAR* c = walkingString->GetBuffer(); (*c) != '\0'; c++)
+                {
+                    hash = hash * 37;
+                    hash = hash + (int)(*c);
+                }
+                hash = hash & 0xf;
+                if (hash_table[hash] == nullptr)
+                {
+                    hash_table[hash] = ref;
+                }
+                else
+                {
+                    StringObject* tableString = (StringObject*)(*hash_table[hash]);
+                    if (wcscmp(walkingString->GetBuffer(), tableString->GetBuffer()) == 0)
+                    {
+                        // ANDREW_TODO: Interlock if concurrent
+                        (*ref) = (uint8_t*)tableString;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void gc_heap::andrew()
+{
+    andrew_break();
+#ifdef MULTIPLE_HEAPS
+    for (int i = 0; i < n_heaps; i++)
+    {
+        g_heaps[i]->andrew2();
+    }
+#else
+    this->andrew2();
+#endif
+    andrew_break();
+}
+
+void gc_heap::andrew2()
+{
+    // A dirt cheap hash table for just 16 slot without collision detection
+    uint8_t** hash_table[16];
+    for (int i = 0; i < 16; i++)
+    {
+        hash_table[i] = nullptr;
+    }
+    // Let's forget about concurrency for now - stop the world
+    suspend_EE();
+    
+    // I hard code!
+    generation* gen2 = generation_of (2);
+    heap_segment* seg = heap_segment_rw (generation_start_segment (gen2));
+    while (seg)
+    {
+        uint8_t* obj = heap_segment_mem (seg);
+        uint8_t* end = heap_segment_allocated (seg);
+
+        // should continue walk | obj < end | seg == ephemeral_heap_segment | obj < generation_allocation_start (gen1)
+        //                    F |         F |                             F |                                        F
+        //                    F |         F |                             F |                                        T
+        //                    F |         F |                             T |                                        F
+        //                    F |         F |                             T |                                        T
+        //                    T |         T |                             F |                                        F
+        //                    T |         T |                             F |                                        T
+        //                    F |         T |                             T |                                        F
+        //                    T |         T |                             T |                                        T
+        while ((obj < end) && ((seg != ephemeral_heap_segment) || ((seg == ephemeral_heap_segment) && (obj < generation_allocation_start (generation_of (1))))))
+        {
+            if (*((uint8_t**)obj) != (uint8_t *) g_gc_pFreeObjectMethodTable)
+            {
+                // I have got a valid object in gen2.
+                // wprintf (L"!do %p\n", obj);
+                go_through_object_cl (method_table (obj), obj, size (obj), ref, {andrew1 (hash_table, ref);});
+            }
+            obj = obj + Align (size (obj));
+        }
+        seg = heap_segment_next_rw (seg);
+    }
+    restart_EE();
+}
+#endif

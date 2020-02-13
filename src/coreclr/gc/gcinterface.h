@@ -904,6 +904,9 @@ public:
 
     IGCHeap() {}
     virtual ~IGCHeap() {}
+
+public:
+    virtual void Trampoline() = 0;
 };
 
 #ifdef WRITE_BARRIER_CHECK

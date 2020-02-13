@@ -1,0 +1,1 @@
+C:\Dev\runtime\artifacts\bin\Strings\Debug\netcoreapp3.1\win-x64\publish\Strings.exe
