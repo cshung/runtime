@@ -87,6 +87,8 @@
                              message="$(string.RuntimePublisher.TypeDiagnosticKeywordMessage)" symbol="CLR_TYPEDIAGNOSTIC_KEYWORD" />
                     <keyword name="JitInstrumentationDataKeyword" mask="0x10000000000"
                              message="$(string.RuntimePublisher.JitInstrumentationDataKeywordMessage)" symbol="CLR_JITINSTRUMENTEDDATA_KEYWORD" />
+                    <keyword name="StringComparsionDetectorKeyword" mask="0x20000000000"
+                             message="$(string.RuntimePublisher.StringComparsionDetectorKeywordMessage)" symbol="CLR_STRING_COMPARISON_DETECTOR_KEYWORD" />
                 </keywords>
                 <!--Tasks-->
                 <tasks>
@@ -3900,6 +3902,10 @@
                            keywords ="JitInstrumentationDataKeyword" opcode="InstrumentationDataVerbose"
                            task="JitInstrumentationData"
                            symbol="JitInstrumentationDataVerbose" message="$(string.RuntimePublisher.JitInstrumentationDataEventMessage)"/>
+
+                    <event value="299" version="0" level="win:Informational"
+                           keywords ="StringComparsionDetectorKeyword"
+                           symbol="StringReferenceComparsionHappened" message="$(string.RuntimePublisher.StringReferenceComparsionHappenedEventMessage)"/>
                 </events>
             </provider>
 
@@ -7659,6 +7665,9 @@
                 <string id="RuntimePublisher.JitInstrumentationDataKeywordMessage" value="JitInstrumentationData" />
                 <string id="RuntimePublisher.GenAwareBeginEventMessage" value="NONE" />
                 <string id="RuntimePublisher.GenAwareEndEventMessage" value="NONE" />
+                <string id="RuntimePublisher.StringComparsionDetectorKeywordMessage" value="StringComparsionDetectorKeyword" />
+                <string id="RuntimePublisher.StringReferenceComparsionHappenedEventMessage" value="NONE" />
+                
                 <string id="RundownPublisher.LoaderKeywordMessage" value="Loader" />
                 <string id="RundownPublisher.JitKeywordMessage" value="Jit" />
                 <string id="RundownPublisher.JittedMethodILToNativeMapRundownKeywordMessage" value="JittedMethodILToNativeMapRundown" />

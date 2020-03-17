@@ -1281,6 +1281,24 @@ NOINLINE HCIMPL1(void, JIT_InitClass_Framed, MethodTable* pMT)
 }
 HCIMPLEND
 
+HCIMPL2(int, JIT_CompareReference, Object* obj1, Object* obj2)
+{
+    FCALL_CONTRACT;
+    
+    HELPER_METHOD_FRAME_BEGIN_2(obj1, obj2);
+
+    MethodTable* mt1 = (obj1 == nullptr) ? nullptr : obj1->GetMethodTable();
+    MethodTable* mt2 = (obj2 == nullptr) ? nullptr : obj2->GetMethodTable();
+    if (g_pStringClass == mt1 && g_pStringClass == mt2)
+    {
+        FireEtwStringReferenceComparsionHappened();
+    }
+
+    HELPER_METHOD_FRAME_END();
+
+    return obj1 == obj2;
+}
+HCIMPLEND
 
 /*************************************************************/
 #include <optsmallperfcritical.h>

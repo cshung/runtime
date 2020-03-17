@@ -217,7 +217,7 @@ namespace System
         // for meaning of different comparisonType.
         public static int Compare(string? strA, string? strB, StringComparison comparisonType)
         {
-            if (object.ReferenceEquals(strA, strB))
+            if (strA == null && strB == null)
             {
                 CheckStringComparison(comparisonType);
                 return 0;
@@ -373,7 +373,7 @@ namespace System
 
             if (strA == null || strB == null)
             {
-                if (object.ReferenceEquals(strA, strB))
+                if (strA == null && strB == null)
                 {
                     // They're both null
                     return 0;
@@ -399,7 +399,7 @@ namespace System
                 throw new ArgumentOutOfRangeException(paramName, SR.ArgumentOutOfRange_Index);
             }
 
-            if (length == 0 || (object.ReferenceEquals(strA, strB) && indexA == indexB))
+            if (length == 0)
             {
                 return 0;
             }
@@ -430,7 +430,7 @@ namespace System
         //
         public static int CompareOrdinal(string? strA, string? strB)
         {
-            if (object.ReferenceEquals(strA, strB))
+            if (strA == null && strB == null)
             {
                 return 0;
             }
@@ -465,7 +465,7 @@ namespace System
         {
             if (strA == null || strB == null)
             {
-                if (object.ReferenceEquals(strA, strB))
+                if (strA == null && strB == null)
                 {
                     // They're both null
                     return 0;
@@ -497,7 +497,7 @@ namespace System
                 throw new ArgumentOutOfRangeException(paramName, SR.ArgumentOutOfRange_Index);
             }
 
-            if (length == 0 || (object.ReferenceEquals(strA, strB) && indexA == indexB))
+            if (length == 0)
             {
                 return 0;
             }
@@ -609,9 +609,6 @@ namespace System
         // Determines whether two strings match.
         public override bool Equals([NotNullWhen(true)] object? obj)
         {
-            if (object.ReferenceEquals(this, obj))
-                return true;
-
             if (!(obj is string str))
                 return false;
 
@@ -624,9 +621,6 @@ namespace System
         // Determines whether two strings match.
         public bool Equals([NotNullWhen(true)] string? value)
         {
-            if (object.ReferenceEquals(this, value))
-                return true;
-
             // NOTE: No need to worry about casting to object here.
             // If either side of an == comparison between strings
             // is null, Roslyn generates a simple ceq instruction
@@ -642,12 +636,6 @@ namespace System
 
         public bool Equals([NotNullWhen(true)] string? value, StringComparison comparisonType)
         {
-            if (object.ReferenceEquals(this, value))
-            {
-                CheckStringComparison(comparisonType);
-                return true;
-            }
-
             if (value is null)
             {
                 CheckStringComparison(comparisonType);
@@ -683,11 +671,6 @@ namespace System
         // Determines whether two Strings match.
         public static bool Equals(string? a, string? b)
         {
-            if (object.ReferenceEquals(a, b))
-            {
-                return true;
-            }
-
             if (a is null || b is null || a.Length != b.Length)
             {
                 return false;
@@ -698,12 +681,6 @@ namespace System
 
         public static bool Equals(string? a, string? b, StringComparison comparisonType)
         {
-            if (object.ReferenceEquals(a, b))
-            {
-                CheckStringComparison(comparisonType);
-                return true;
-            }
-
             if (a is null || b is null)
             {
                 CheckStringComparison(comparisonType);

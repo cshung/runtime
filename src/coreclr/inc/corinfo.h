@@ -606,6 +606,8 @@ enum CorInfoHelpFunc
 
     CORINFO_HELP_PATCHPOINT,                // Notify runtime that code has reached a patchpoint
     CORINFO_HELP_CLASSPROFILE,              // Update class profile for a call site
+    
+    CORINFO_HELP_COMPARE,                   // Andrew wanted to perform object reference comparison done by a helper function
 
     CORINFO_HELP_COUNT,
 };

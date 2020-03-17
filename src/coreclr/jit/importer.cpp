@@ -13019,6 +13019,13 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                 op2 = impPopStack().val;
                 op1 = impPopStack().val;
 
+                if (opcode == CEE_CEQ && genActualType(op1->TypeGet()) == TYP_REF)
+                {
+                    op1 = gtNewHelperCallNode(CORINFO_HELP_COMPARE, TYP_INT, gtNewCallArgs(op1, op2));
+                    impPushOnStack(op1, tiRetVal);
+                    break;
+                }
+
 #ifdef TARGET_64BIT
                 if (varTypeIsI(op1->TypeGet()) && (genActualType(op2->TypeGet()) == TYP_INT))
                 {
