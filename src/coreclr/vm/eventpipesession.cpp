@@ -345,6 +345,7 @@ bool EventPipeSession::WriteEvent(
 
     if (this->m_paused)
     {
+        // TODO, andrewau, it looks like the return value of this method is not consumed at all?
         return true;
     }
 
@@ -354,17 +355,17 @@ bool EventPipeSession::WriteEvent(
         if (m_synchronousCallback != nullptr)
         {
             m_synchronousCallback(event.GetProvider(),
-                                  event.GetEventID(),
-                                  event.GetEventVersion(),
-                                  event.GetMetadataLength(),
-                                  event.GetMetadata(),
-                                  payload.GetSize(),
-                                  payload.GetFlatData(),
-                                  pActivityId,
-                                  pRelatedActivityId,
-                                  pEventThread,
-                                  pStack == nullptr ? 0 : pStack->GetSize(),
-                                  pStack == nullptr ? nullptr : reinterpret_cast<UINT_PTR *>(pStack->GetPointer()));
+                                event.GetEventID(),
+                                event.GetEventVersion(),
+                                event.GetMetadataLength(),
+                                event.GetMetadata(),
+                                payload.GetSize(),
+                                payload.GetFlatData(),
+                                pActivityId,
+                                pRelatedActivityId,
+                                pEventThread,
+                                pStack == nullptr ? 0 : pStack->GetSize(),
+                                pStack == nullptr ? nullptr : reinterpret_cast<UINT_PTR *>(pStack->GetPointer()));
             return true;
         }
         else

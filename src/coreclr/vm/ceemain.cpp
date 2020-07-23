@@ -225,6 +225,7 @@
 #endif // FEATURE_GDBJIT
 
 #include "genanalysis.h"
+#include "diagnosticstriggermanager.h"
 
 #ifndef CROSSGEN_COMPILE
 static int GetThreadUICultureId(__out LocaleIDValue* pLocale);  // TODO: This shouldn't use the LCID.  We should rely on name instead
@@ -1231,7 +1232,7 @@ void STDMETHODCALLTYPE EEShutDownHelper(BOOL fIsDllUnloading)
     if (!fIsDllUnloading)
     {
         ETW::EnumerationLog::ProcessShutdown();
-
+        DiagnosticsTriggerManager::GetInstance().Shutdown();
 #ifdef FEATURE_PERFTRACING
         EventPipeAdapter::Shutdown();
         DiagnosticServerAdapter::Shutdown();

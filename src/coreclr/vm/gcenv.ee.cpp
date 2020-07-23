@@ -1627,6 +1627,9 @@ void GCToEEInterface::AnalyzeSurvivorsFinished(size_t gcIndex, int condemnedGene
             EnableFinalization(true);
         }
     }
+
+    DiagnosticsTriggerManager& diagnosticsTriggerManager = DiagnosticsTriggerManager::GetInstance();
+    diagnosticsTriggerManager.AnalyzeSurvivors();
 }
 
 void GCToEEInterface::VerifySyncTableEntry()

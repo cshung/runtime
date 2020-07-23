@@ -329,6 +329,7 @@ set(VM_SOURCES_WKS
     customattribute.cpp
     custommarshalerinfo.cpp
     autotrace.cpp
+    diagnosticstriggermanager.cpp
     dllimportcallback.cpp
     dynamicinterfacecastable.cpp
     eeconfig.cpp
