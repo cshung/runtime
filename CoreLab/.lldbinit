@@ -1,0 +1,3 @@
+breakpoint set -r EnsureEEStarted
+run
+breakpoint set -r .*andrew_debug
