@@ -6752,7 +6752,10 @@ bool gc_heap::virtual_commit (void* address, size_t size, gc_oh_num oh, int h_nu
     {
 #ifdef VERIFY_COMMITTED_BY_OH
 #ifdef MULTIPLE_HEAPS
-        g_heaps[h_number]->committed_by_oh_per_heap[oh] -= size;
+        if (h_number != -1)
+        {
+            g_heaps[h_number]->committed_by_oh_per_heap[oh] -= size;
+        }
 #else
         committed_by_oh_per_heap[oh] -= size;
         dprintf (COMMIT_ACCOUNTING_LOG, ("%d -= %d\n", oh, size));
@@ -6787,7 +6790,10 @@ bool gc_heap::virtual_decommit (void* address, size_t size, gc_oh_num oh, int h_
     {
 #ifdef VERIFY_COMMITTED_BY_OH
 #ifdef MULTIPLE_HEAPS
-        g_heaps[h_number]->committed_by_oh_per_heap[oh] -= size;
+        if (h_number != -1)
+        {
+            g_heaps [h_number]->committed_by_oh_per_heap[oh] -= size;
+        }
 #else
         committed_by_oh_per_heap[oh] -= size;
         dprintf (COMMIT_ACCOUNTING_LOG, ("%d -= %d\n", oh, size));
@@ -12626,8 +12632,8 @@ int
 gc_heap::init_gc_heap (int  h_number)
 {
 #ifdef MULTIPLE_HEAPS
-#ifdef VERIFY_COMMITTED_BY_OH
     g_heaps [h_number] = this;
+#ifdef VERIFY_COMMITTED_BY_OH
     for (int i = 0; i < gc_oh_num::total_oh_count; i++)
     {
         committed_by_oh_per_heap [i] = 0;
