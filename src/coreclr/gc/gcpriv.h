@@ -2254,6 +2254,9 @@ protected:
     PER_HEAP
     void add_to_promoted_bytes (uint8_t* object, size_t obj_size, int thread);
 
+    PER_HEAP_ISOLATED
+    size_t&  moved_bytes (int);
+
     PER_HEAP
     uint8_t* find_object (uint8_t* o);
 
@@ -4896,6 +4899,8 @@ public:
     size_t*   g_promoted;
 #endif //!USE_REGIONS || _DEBUG
 
+    static
+    size_t*   g_moved;
 #ifdef BACKGROUND_GC
     static
     size_t*   g_bpromoted;
@@ -4909,6 +4914,8 @@ public:
     static
     size_t    g_promoted;
 #endif //!USE_REGIONS || _DEBUG
+    static
+    size_t    g_moved;
 #ifdef BACKGROUND_GC
     static
     size_t    g_bpromoted;

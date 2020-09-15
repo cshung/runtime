@@ -24,6 +24,11 @@
 #define USE_INTROSORT
 #endif
 
+void andrew_debug()
+{
+
+}
+
 // We just needed a simple random number generator for testing.
 class gc_rand
 {
@@ -2165,6 +2170,7 @@ gc_heap**   gc_heap::g_heaps;
 #if !defined(USE_REGIONS) || defined(_DEBUG)
 size_t*     gc_heap::g_promoted;
 #endif //!USE_REGIONS || _DEBUG
+size_t*     gc_heap::g_moved;
 
 #ifdef MH_SC_MARK
 int*        gc_heap::g_mark_stack_busy;
@@ -2181,6 +2187,7 @@ size_t      gc_heap::max_decommit_step_size = 0;
 #if !defined(USE_REGIONS) || defined(_DEBUG)
 size_t      gc_heap::g_promoted;
 #endif //!USE_REGIONS || _DEBUG
+size_t      gc_heap::g_moved;
 
 #ifdef BACKGROUND_GC
 size_t      gc_heap::g_bpromoted;
@@ -12690,6 +12697,9 @@ HRESULT gc_heap::initialize_gc (size_t soh_segment_size,
     if (!g_promoted)
         return E_OUTOFMEMORY;
 #endif //!USE_REGIONS || _DEBUG
+    g_moved = new (nothrow) size_t [number_of_heaps*16];
+    if (!g_promoted)
+        return E_OUTOFMEMORY;
     g_bpromoted = new (nothrow) size_t [number_of_heaps*16];
     if (!g_bpromoted)
         return E_OUTOFMEMORY;
@@ -18844,20 +18854,27 @@ int gc_heap::joined_generation_to_condemn (BOOL should_evaluate_elevation,
     // [LOCALGC TODO] STRESS_HEAP is not defined for a standalone GC so there are multiple
     // things that need to be fixed in this code block.
     if (n_original != max_generation &&
-        g_pConfig->GetGCStressLevel() && gc_can_use_concurrent)
+        g_pConfig->GetGCStressLevel())
     {
-#ifndef FEATURE_REDHAWK
-        if (*blocking_collection_p)
+        if (gc_can_use_concurrent)
         {
-            // We call StressHeap() a lot for Concurrent GC Stress. However,
-            // if we can not do a concurrent collection, no need to stress anymore.
-            // @TODO: Enable stress when the memory pressure goes down again
-            GCStressPolicy::GlobalDisable();
+    #ifndef FEATURE_REDHAWK
+            if (*blocking_collection_p)
+            {
+                // We call StressHeap() a lot for Concurrent GC Stress. However,
+                // if we can not do a concurrent collection, no need to stress anymore.
+                // @TODO: Enable stress when the memory pressure goes down again
+                GCStressPolicy::GlobalDisable();
+            }
+            else
+    #endif // !FEATURE_REDHAWK
+            {
+                gc_data_global.gen_to_condemn_reasons.set_condition(gen_joined_stress);
+                n = max_generation;
+            }
         }
         else
-#endif // !FEATURE_REDHAWK
         {
-            gc_data_global.gen_to_condemn_reasons.set_condition(gen_joined_stress);
             n = max_generation;
         }
     }
@@ -21865,6 +21882,17 @@ void gc_heap::add_to_promoted_bytes (uint8_t* object, size_t obj_size, int threa
     // Verify we keep the 2 recordings in sync.
     //get_promoted_bytes();
 #endif //_DEBUG
+}
+
+inline
+size_t& gc_heap::moved_bytes(int thread)
+{
+#ifdef MULTIPLE_HEAPS
+    return g_moved [thread*16];
+#else //MULTIPLE_HEAPS
+    UNREFERENCED_PARAMETER(thread);
+    return g_moved;
+#endif //MULTIPLE_HEAPS
 }
 
 heap_segment* gc_heap::find_segment (uint8_t* interior, BOOL small_segment_only_p)
@@ -31530,6 +31558,11 @@ void gc_heap::compact_plug (uint8_t* plug, size_t size, BOOL check_last_object_p
 #endif //SHORT_PLUGS
 
     gcmemcopy (reloc_plug, plug, size, args->copy_cards_p);
+    if (reloc_plug != plug)
+    {
+        moved_bytes (heap_number) += size;
+    }
+    andrew_debug();
 
     if (args->check_gennum_p)
     {
@@ -31719,6 +31752,7 @@ void gc_heap::compact_phase (int condemned_gen_number,
                              uint8_t*  first_condemned_address,
                              BOOL clear_cards)
 {
+    moved_bytes (heap_number) = 0;
 #ifdef MULTIPLE_HEAPS
     dprintf(3, ("Joining after end of relocation"));
     gc_t_join.join(this, gc_join_relocate_phase_done);
@@ -43310,25 +43344,7 @@ bool GCHeap::StressHeap(gc_alloc_context * context)
     }
     Interlocked::Decrement(&OneAtATime);
 #endif // !MULTIPLE_HEAPS
-    if (IsConcurrentGCEnabled())
-    {
-        int rgen = StressRNG(10);
-
-        // gen0:gen1:gen2 distribution: 40:40:20
-        if (rgen >= 8)
-            rgen = 2;
-        else if (rgen >= 4)
-            rgen = 1;
-    else
-            rgen = 0;
-
-        GarbageCollectTry (rgen, FALSE, collection_gcstress);
-    }
-    else
-    {
-        GarbageCollect(max_generation, FALSE, collection_gcstress);
-    }
-
+    GarbageCollectTry (max_generation, FALSE, collection_gcstress);
     return TRUE;
 #else
     UNREFERENCED_PARAMETER(context);
