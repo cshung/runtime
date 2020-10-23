@@ -26,6 +26,8 @@ include(../eglib/CMakeLists.txt)
 include(../utils/CMakeLists.txt)
 include(../metadata/CMakeLists.txt)
 include(../sgen/CMakeLists.txt)
+include(../coregc/CMakeLists.txt)
+
 if(TARGET_WIN32)  # TODO: hook up HAVE_SYS_ZLIB instead
   include(../zlib/CMakeLists.txt)
 endif()
@@ -318,7 +320,7 @@ set(mini_sources "${mini_sources};${PROJECT_BINARY_DIR}/../../NativeVersion.rc")
 endif()
 
 
-add_library(monosgen-objects OBJECT "${eglib_sources};${metadata_sources};${utils_sources};${sgen_sources};${icu_shim_sources};${eventpipe_sources};${mini_sources};${zlib_sources}")
+add_library(monosgen-objects OBJECT "${eglib_sources};${metadata_sources};${utils_sources};${sgen_sources};${coregc_sources};${icu_shim_sources};${eventpipe_sources};${mini_sources};${zlib_sources}")
 add_library(monosgen-static STATIC $<TARGET_OBJECTS:monosgen-objects>)
 set_target_properties(monosgen-static PROPERTIES OUTPUT_NAME monosgen-2.0)
 if(NOT DISABLE_LIBS)
