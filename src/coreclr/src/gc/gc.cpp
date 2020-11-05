@@ -6425,6 +6425,7 @@ void gc_heap::fix_youngest_allocation_area()
     heap_segment_allocated (ephemeral_heap_segment) = alloc_allocated;
 }
 
+#define assert(expr) ((void)0)
 void gc_heap::fix_uoh_allocation_area()
 {
     for (int i = uoh_start_generation; i < total_generation_count; i++)
