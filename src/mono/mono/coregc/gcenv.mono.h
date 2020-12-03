@@ -171,7 +171,7 @@ public:
 
 // CoreGC doesn't accept objects smaller than this, since it needs to replace them with array fill
 // vtable which contains header_ptr, vtable_ptr, sync_ptr and length
-#define MIN_OBJECT_SIZE     (4*sizeof(uint8_t*))
+#define MIN_OBJECT_SIZE     (3*sizeof(uint8_t*))
 
 /* The layout of ArrayBase needs to be congruent with MonoString and MonoArray,
     up to the length field. This currently relies on the compiler to put the inherited fields

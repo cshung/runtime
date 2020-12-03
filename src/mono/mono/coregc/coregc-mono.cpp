@@ -300,7 +300,7 @@ typedef union {
 
 #define BITMAP_EL_SIZE (sizeof (gsize) * 8)
 
-#define MIN_OBJECT_SIZE (4 * sizeof (void*))
+#define MIN_OBJECT_SIZE (3 * sizeof (void*))
 
 MonoGCDescriptor
 mono_gc_make_descr_for_object (gpointer klass, gsize *bitmap, int numbits, size_t obj_size, GPtrArray **gc_descr_full)
@@ -581,6 +581,13 @@ mono_gc_free_fixed (void* addr)
 	g_free (addr);
 }
 
+int counter = 1;
+
+void andrew_debug()
+{
+	printf("Andrew said the 220th allocation is interesting!\n");
+}
+
 MonoObject*
 mono_gc_alloc_obj (MonoVTable *vtable, size_t size)
 {
@@ -588,8 +595,7 @@ mono_gc_alloc_obj (MonoVTable *vtable, size_t size)
 	uint32_t flags = 0;
 	// Add header size that the runtime doesn't know about.
 	size += sizeof (gpointer);
-	if (size < MIN_OBJECT_SIZE)
-		size = MIN_OBJECT_SIZE;
+	assert(size >= MIN_OBJECT_SIZE);
 	if (mono_class_has_finalizer(vtable->klass))
 		flags |= GC_ALLOC_FINALIZE;
 
@@ -604,11 +610,13 @@ mono_gc_alloc_obj (MonoVTable *vtable, size_t size)
 
 	o->vtable = vtable;
 
-	// Deubgging
+	// Debugging
 	MethodTable* mt = (MethodTable*)(o->vtable);
-	// g_assert(mt->GetBaseSize() + mt-> == size);
-	printf("mono_gc_alloc_obj: %p o->vtable: %p, o->vtable->gc_descr: %llu, size: %ld, o->vtable->gc_descr.m_baseSize: %d\n", o, o->vtable, o->vtable->gc_descr, size, mt->GetBaseSize());
-	
+	if (counter == 220)
+	{
+		andrew_debug();	
+	}
+	printf("Andrew: (%d) %p should have size %d\n", (counter++), o, size);
 	return o;
 }
 

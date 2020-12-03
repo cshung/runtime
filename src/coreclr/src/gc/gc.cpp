@@ -9704,18 +9704,16 @@ size_t my_get_size (Object* ob)
 {
     MethodTable* mT = header(ob)->GetMethodTable();
 
-    printf("gc.cpp: my_get_size: ob: %p MIN_OBJECT_SIZE: %d\n", ob, MIN_OBJECT_SIZE);
+    size_t result = (mT->GetBaseSize() +
+            (mT->HasComponentSize() ?
+             ((size_t)((CObjectHeader*)ob)->GetNumComponents() * mT->RawGetComponentSize()) : 0));
 
-    size_t size = (mT->GetBaseSize() +
-                    (mT->HasComponentSize() ?
-                    ((size_t)((CObjectHeader*)ob)->GetNumComponents() * mT->RawGetComponentSize()) : 0));
-    
-    if (size < 4 * MIN_OBJECT_SIZE)
-    {
-        size = MIN_OBJECT_SIZE;
-    }
-
-    return size;
+    printf("Andrew: gc said %p has size %d\n", ob, result);
+    printf("Andrew: mt->GetBaseSize() = %d\n", mT->GetBaseSize());
+    printf("Andrew: mt->HasComponentSize() = %d\n", mT->HasComponentSize());
+    printf("Andrew: ob->GetNumComponents() = %d\n", ((CObjectHeader*)ob)->GetNumComponents());
+    printf("Andrew: mt->RawGetComponentSize() = %d\n", mT->RawGetComponentSize());
+    return result;
 }
 
 //#define size(i) header(i)->GetSize()
