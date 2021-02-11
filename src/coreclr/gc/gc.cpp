@@ -38109,6 +38109,7 @@ void gc_heap::init_static_data()
     }
 
     gen1_max_size = Align (gen1_max_size);
+    float limit = (float)GCConfig::GetGCBudgetGrowthLimit(); 
 
     dprintf (GTC_LOG, ("gen0 min: %Id, max: %Id, gen1 max: %Id",
         gen0_min_size, gen0_max_size, gen1_max_size));
@@ -38118,7 +38119,19 @@ void gc_heap::init_static_data()
         static_data_table[i][0].min_size = gen0_min_size;
         static_data_table[i][0].max_size = gen0_max_size;
         static_data_table[i][1].max_size = gen1_max_size;
+        static_data_table[i][1].limit = limit;
     }
+
+    // Let's write the effective config to a file.
+    //
+    FILE* f = fopen("C:\\dev\\MLOS\\WorkingDir\\effective_config.json", "w");
+    fprintf(f, "{\n");
+    fprintf(f, "\t\"complus_gcgen0size_bytes\": %d,\n", gen0_min_size);
+    fprintf(f, "\t\"complus_gcgen0maxbudget_bytes\": %d,\n", gen0_max_size);
+    fprintf(f, "\t\"complus_gcgen1maxbudget_bytes\": %d,\n", gen1_max_size);
+    fprintf(f, "\t\"complus_gc_budget_growth_limit\": %f\n", limit);
+    fprintf(f, "}\n");
+    fclose(f);
 }
 
 bool gc_heap::init_dynamic_data()

@@ -99,6 +99,7 @@ public:
     INT_CONFIG   (GCProvModeStress,       "GCProvModeStress",       NULL,                             0,                 "Stress the provisional modes")                                                           \
     INT_CONFIG   (GCGen0MaxBudget,        "GCGen0MaxBudget",        NULL,                             0,                 "Specifies the largest gen0 allocation budget")                                           \
     INT_CONFIG   (GCGen1MaxBudget,        "GCGen1MaxBudget",        NULL,                             0,                 "Specifies the largest gen1 allocation budget")                                           \
+    INT_CONFIG   (GCBudgetGrowthLimit,    "GCBudgetGrowthLimit",    NULL,                             20,                "Specifies how aggressively to grow the budget. Larger means more aggressively")          \
     INT_CONFIG   (GCLowSkipRatio,         "GCLowSkipRatio",         NULL,                             30,                "Specifies the low generation skip ratio")                                                \
     INT_CONFIG   (GCHeapHardLimit,        "GCHeapHardLimit",        "System.GC.HeapHardLimit",        0,                 "Specifies a hard limit for the GC heap")                                                 \
     INT_CONFIG   (GCHeapHardLimitPercent, "GCHeapHardLimitPercent", "System.GC.HeapHardLimitPercent", 0,                 "Specifies the GC heap usage as a percentage of the total memory")                        \
