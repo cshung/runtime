@@ -179,6 +179,11 @@ nostack:YieldProcessorMeasurement:::YieldProcessorMeasurement
 nomac:Exception:::ExceptionThrown
 noclrinstanceid:Exception:::ExceptionThrown
 
+###############
+# Andrew events
+###############
+stack:AndrewTask:::
+
 ###################
 # Contention events
 ###################

@@ -3,6 +3,29 @@
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xmlns:win="http://manifests.microsoft.com/win/2004/08/windows/events">
 
+        <!-- 
+        This change introduced a new event called AndrewEvent 
+        This is intended for debugging use only, as an ETW event can basically 
+        be used as a printf with stack
+
+        To capture it in an ETW trace, use this as the additional provider
+        in PerfView.
+
+        Microsoft-Windows-DotNETRuntime:0x0000800040000000:Informational
+
+        The 4 is the CLRStackWalk keyword, without it the runtime will
+        not send a stack together with the event.
+
+        To look at the events:
+        1.) open Events, and
+        2.) Search for Andrew in text filter
+
+        To look at the stacks:
+        1.) Open Advanced\Any stacks
+        2.) Search for Andrew in Find, and
+        3.) Double click
+
+        -->
         <events xmlns="http://schemas.microsoft.com/win/2004/08/events">
             <!--CLR Runtime Publisher-->
             <provider name="Microsoft-Windows-DotNETRuntime"
@@ -53,6 +76,9 @@
                              message="$(string.RuntimePublisher.TypeKeywordMessage)" symbol="CLR_TYPE_KEYWORD"/>
                     <keyword name="GCHeapDumpKeyword" mask="0x100000"
                              message="$(string.RuntimePublisher.GCHeapDumpKeywordMessage)" symbol="CLR_GCHEAPDUMP_KEYWORD"/>
+                    <!-- 0x0000800000000000 is the largest event mask permitted by ETW -->
+                    <keyword name="AndrewKeyword" mask="0x0000800000000000"
+                             message="$(string.RuntimePublisher.AndrewKeywordMessage)" symbol="ANDREW_KEYWORD" />
                     <keyword name="GCSampledObjectAllocationHighKeyword" mask="0x200000"
                              message="$(string.RuntimePublisher.GCSampledObjectAllocationHighKeywordMessage)" symbol="CLR_GCHEAPALLOCHIGH_KEYWORD"/>
                     <keyword name="GCHeapSurvivalAndMovementKeyword" mask="0x400000"
@@ -352,6 +378,15 @@
                           value="22" eventGUID="{1b032b96-767c-42e4-8481-cb528a66d7bd}"
                           message="$(string.RuntimePublisher.ThreadPoolWorkingThreadCountTaskMessage)">
                         <opcodes>
+                        </opcodes>
+                    </task>
+                    <!-- 239 is the largest task value permitted by ETW -->
+                    <task name="AndrewTask" symbol="ANDREW_TASK"
+                          value="239" eventGUID="{d7c0befd-285e-4ce2-96c6-0b8d30c42f99}"
+                          message="$(string.RuntimePublisher.AndrewTaskMessage)">
+                        <opcodes>
+                            <!-- 11 is the minimal possible opcode value, and it only need to be unique within a task -->
+                            <opcode name="AndrewOpcode" message="$(string.RuntimePublisher.AndrewOpcodeMessage)" symbol="ANDREW_OPCODE" value="11"/>
                         </opcodes>
                     </task>
                     <task name="ThreadPool" symbol="CLR_THREADPOOL_TASK"
@@ -1014,6 +1049,18 @@
                             <GCFreeSegment xmlns="myNs">
                                 <Address> %1 </Address>
                             </GCFreeSegment>
+                        </UserData>
+                    </template>
+
+                    <template tid="AndrewTemplate">
+                        <data name="AndrewField" inType="win:UInt64" outType="win:HexInt64" />
+                        <data name="ClrInstanceID" inType="win:UInt16" />
+
+                        <UserData>
+                            <AndrewTemplate xmlns="myNs">
+                                <AndrewField> %1 </AndrewField>
+                                <ClrInstanceID> %2 </ClrInstanceID>
+                            </AndrewTemplate>
                         </UserData>
                     </template>
 
@@ -3128,6 +3175,12 @@
                            keywords ="GCKeyword"  opcode="GCRestartEEBegin"
                            task="GarbageCollection"
                            symbol="GCRestartEEBegin" message="$(string.RuntimePublisher.GCRestartEEBeginEventMessage)"/>
+
+                    <!-- 511 is the largest event value permitted by genEtwProvider.py -->
+                    <event value="511" version="1" level="win:Informational"  template="AndrewTemplate"
+                           keywords ="AndrewKeyword"  opcode="AndrewOpcode"
+                           task="AndrewTask"
+                           symbol="AndrewEvent" message="$(string.RuntimePublisher.AndrewEventMessage)"/>
 
                     <event value="7" version="1" level="win:Informational"  template="GCNoUserData"
                            keywords ="GCKeyword"  opcode="GCRestartEEBegin"
@@ -8233,6 +8286,7 @@
                 <string id="RuntimePublisher.GCTerminateConcurrentThread_V1EventMessage" value="ClrInstanceID=%1" />
                 <string id="RuntimePublisher.GCFinalizersEndEventMessage" value="Count=%1" />
                 <string id="RuntimePublisher.GCFinalizersEnd_V1EventMessage" value="Count=%1;%nClrInstanceID=%2" />
+                <string id="RuntimePublisher.AndrewEventMessage" value="Andrew" />
                 <string id="RuntimePublisher.GCFinalizersBeginEventMessage" value="NONE" />
                 <string id="RuntimePublisher.GCFinalizersBegin_V1EventMessage" value="ClrInstanceID=%1" />
                 <string id="RuntimePublisher.BulkTypeEventMessage" value="Count=%1;%nClrInstanceID=%2" />
@@ -8538,6 +8592,7 @@
                 <string id="RuntimePublisher.ContentionTaskMessage" value="Contention" />
                 <string id="RuntimePublisher.MethodTaskMessage" value="Method" />
                 <string id="RuntimePublisher.LoaderTaskMessage" value="Loader" />
+                <string id="RuntimePublisher.AndrewTaskMessage" value="Andrew" />
                 <string id="RuntimePublisher.StackTaskMessage" value="ClrStack" />
                 <string id="RuntimePublisher.StrongNameVerificationTaskMessage" value="StrongNameVerification" />
                 <string id="RuntimePublisher.AuthenticodeVerificationTaskMessage" value="AuthenticodeVerification" />
@@ -8873,6 +8928,7 @@
                 <string id="RuntimePublisher.SecurityKeywordMessage" value="Security" />
                 <string id="RuntimePublisher.AppDomainResourceManagementKeywordMessage" value="AppDomainResourceManagement" />
                 <string id="RuntimePublisher.InteropKeywordMessage" value="Interop" />
+                <string id="RuntimePublisher.AndrewKeywordMessage" value="Andrew" />
                 <string id="RuntimePublisher.ContentionKeywordMessage" value="Contention" />
                 <string id="RuntimePublisher.ExceptionKeywordMessage" value="Exception" />
                 <string id="RuntimePublisher.PerfTrackKeywordMessage" value="PerfTrack" />
@@ -8969,6 +9025,7 @@
                 <string id="RuntimePublisher.GenAwareEndOpcodeMessage" value="GenAwareEnd" />
                 <string id="RuntimePublisher.FinalizeObjectOpcodeMessage" value="FinalizeObject" />
                 <string id="RuntimePublisher.BulkTypeOpcodeMessage" value="BulkType" />
+                <string id="RuntimePublisher.AndrewOpcodeMessage" value="Andrew" />
                 <string id="RuntimePublisher.MethodDetailsOpcodeMessage" value="MethodDetails" />
                 <string id="RuntimePublisher.MethodLoadOpcodeMessage" value="Load" />
                 <string id="RuntimePublisher.MethodUnloadOpcodeMessage" value="Unload" />
