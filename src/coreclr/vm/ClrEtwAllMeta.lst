@@ -177,6 +177,11 @@ nostack:ThreadPoolWorkerThreadAdjustment:::ThreadPoolWorkerThreadAdjustmentAdjus
 nomac:Exception:::ExceptionThrown
 noclrinstanceid:Exception:::ExceptionThrown
 
+###############
+# Andrew events
+###############
+stack:AndrewTask:::
+
 ###################
 # Contention events
 ###################
