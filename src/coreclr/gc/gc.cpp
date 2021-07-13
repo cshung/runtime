@@ -13569,6 +13569,11 @@ HRESULT gc_heap::initialize_gc (size_t soh_segment_size,
 #endif //MULTIPLE_HEAPS
 )
 {
+#ifdef BUILD_AS_STANDALONE
+    dprintf (10086, ("Hello from CLRGC!"));
+#else
+    dprintf (10086, ("Hello from CoreCLR!"));
+#endif
 #ifdef TRACE_GC
     if (GCConfig::GetLogEnabled())
     {

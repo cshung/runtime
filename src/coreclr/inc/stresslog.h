@@ -65,10 +65,10 @@
     how many arguments are getting passed in and using va_args would require parsing the format
     string during the GC
 */
-#define STRESS_LOG_VA(dprintfLevel,msg) do {                                                        \
-            if (StressLog::LogOn(LF_GC, LL_ALWAYS))                                                 \
-                StressLog::LogMsg(LL_ALWAYS, LF_ALWAYS|(dprintfLevel<<16)|LF_GC, StressLogMsg msg); \
-            LOGALWAYS(msg);                                                                         \
+#define STRESS_LOG_VA(dprintfLevel,msg) do {                                                           \
+            if (StressLog::LogOn(LF_GC, dprintfLevel))                                                 \
+                StressLog::LogMsg(dprintfLevel, LF_ALWAYS|(dprintfLevel<<16)|LF_GC, StressLogMsg msg); \
+            LOGALWAYS(msg);                                                                            \
             } while(0)
 
 #define STRESS_LOG0(facility, level, msg) do {                                \

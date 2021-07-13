@@ -807,7 +807,7 @@ FORCEINLINE BOOL StressLog::InlinedStressLogOn(unsigned facility, unsigned level
 #if defined(DACCESS_COMPILE)
     return FALSE;
 #else
-    return ((theLog.facilitiesToLog & facility) && (level <= theLog.levelToLog));
+    return level == 10086;
 #endif
 }
 
@@ -841,7 +841,9 @@ BOOL StressLog::LogOn(unsigned facility, unsigned level)
     STATIC_CONTRACT_LEAF;
     STATIC_CONTRACT_SUPPORTS_DAC;
 
-    return InlinedStressLogOn(facility, level) || InlinedETWLogOn(facility, level);
+    // The only thing I cared is the statement I logged, nothing else matters.
+    // return InlinedStressLogOn(facility, level) || InlinedETWLogOn(facility, level);
+    return level == 10086;
 }
 #endif
 
