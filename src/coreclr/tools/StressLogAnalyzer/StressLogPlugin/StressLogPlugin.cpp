@@ -491,7 +491,9 @@ bool FilterMessage(StressLog::StressLogHeader* hdr, ThreadStressLog* tsl, uint32
         }
         break;
     }
-    return fLevelFilter || s_interestingStringFilter[isd];
+    // If we are logging only specific statement, maybe we just want them all!
+    // return fLevelFilter || s_interestingStringFilter[isd];
+    return true;
 }
 
 struct StressThreadAndMsg
@@ -1347,7 +1349,8 @@ extern "C" int __declspec(dllexport) ProcessStresslog(void* baseAddress, int arg
         }
     }
 
-    for (size_t i = 0; i < s_msgCount; i++)
+    // Here is how we can limit the output size
+    for (size_t i = 0; i < min(s_msgCount, 100); i++)
     {
         uint64_t threadId = (unsigned)s_threadMsgBuf[i].threadId;
         StressMsg* msg = s_threadMsgBuf[i].msg;

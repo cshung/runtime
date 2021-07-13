@@ -49,7 +49,7 @@
       getting passed in and using va_args would require parsing the format string during the GC
 */
 #define STRESS_LOG_VA(level, msg) do {                                        \
-            if (StressLog::LogOn(LF_GC, LL_ALWAYS))                           \
+            if (StressLog::LogOn(LF_GC, level))                               \
                 StressLog::LogMsg(level, StressLogMsg msg);                   \
             LOGALWAYS(msg);                                                   \
             } while(0)
