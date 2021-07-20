@@ -99,31 +99,53 @@ HRESULT ClrDataAccess::GetServerAllocData(unsigned int count, struct DacpGenerat
     return S_OK;
 }
 
-HRESULT ClrDataAccess::ServerGCHeapDetails(CLRDATA_ADDRESS heapAddr, DacpGcHeapDetails *detailsData)
+HRESULT
+ClrDataAccess::ServerGCHeapDetails(CLRDATA_ADDRESS heapAddr, DacpGcHeapDetails *detailsData)
 {
+    // Make sure ClrDataAccess::GetGCHeapStaticData() is updated as well.
     if (!heapAddr)
     {
         // PREfix.
         return E_INVALIDARG;
     }
+    if (detailsData == NULL)
+    {
+        return E_INVALIDARG;
+    }
 
     DPTR(dac_gc_heap) pHeap = __DPtr<dac_gc_heap>(TO_TADDR(heapAddr));
-    int i;
 
     //get global information first
     detailsData->heapAddr = heapAddr;
 
     detailsData->lowest_address = PTR_CDADDR(g_lowest_address);
-    detailsData->highest_address = PTR_CDADDR(g_highest_address);
-    detailsData->card_table = PTR_CDADDR(g_card_table);
+    detailsData->highest_address = PTR_CDADDR(g_highest_address);    
+    detailsData->current_c_gc_state = (CLRDATA_ADDRESS)*g_gcDacGlobals->current_c_gc_state;
 
     // now get information specific to this heap (server mode gives us several heaps; we're getting
     // information about only one of them.
     detailsData->alloc_allocated = (CLRDATA_ADDRESS)pHeap->alloc_allocated;
     detailsData->ephemeral_heap_segment = (CLRDATA_ADDRESS)dac_cast<TADDR>(pHeap->ephemeral_heap_segment);
+    detailsData->card_table = (CLRDATA_ADDRESS)pHeap->card_table;
+    detailsData->mark_array = (CLRDATA_ADDRESS)pHeap->mark_array;
+    detailsData->next_sweep_obj = (CLRDATA_ADDRESS)pHeap->next_sweep_obj;
+    if (pHeap->saved_sweep_ephemeral_seg.IsValid())
+    {
+        detailsData->saved_sweep_ephemeral_seg = (CLRDATA_ADDRESS)dac_cast<TADDR>(pHeap->saved_sweep_ephemeral_seg);
+        detailsData->saved_sweep_ephemeral_start = (CLRDATA_ADDRESS)*pHeap->saved_sweep_ephemeral_start;
+    }
+    else
+    {
+        // with regions, we don't have these variables anymore
+        // use special value -1 in saved_sweep_ephemeral_seg to signal the region case
+        detailsData->saved_sweep_ephemeral_seg = (CLRDATA_ADDRESS)-1;
+        detailsData->saved_sweep_ephemeral_start = 0;
+    }
+    detailsData->background_saved_lowest_address = (CLRDATA_ADDRESS)pHeap->background_saved_lowest_address;
+    detailsData->background_saved_highest_address = (CLRDATA_ADDRESS)pHeap->background_saved_highest_address;
 
     // get bounds for the different generations
-    for (i=0; i<NUMBERGENERATIONS; i++)
+    for (unsigned int i=0; i < *g_gcDacGlobals->max_gen + 2; i++)
     {
         DPTR(dac_generation) generation = ServerGenerationTableIndex(pHeap, i);
         detailsData->generation_table[i].start_segment     = (CLRDATA_ADDRESS)dac_cast<TADDR>(generation->start_segment);
@@ -134,10 +156,13 @@ HRESULT ClrDataAccess::ServerGCHeapDetails(CLRDATA_ADDRESS heapAddr, DacpGcHeapD
     }
 
     DPTR(dac_finalize_queue) fq = pHeap->finalize_queue;
-    DPTR(uint8_t*) pFillPointerArray= dac_cast<TADDR>(fq) + offsetof(dac_finalize_queue, m_FillPointers);
-    for(i=0; i<(NUMBERGENERATIONS+dac_finalize_queue::ExtraSegCount); i++)
+    if (fq.IsValid())
     {
-        detailsData->finalization_fill_pointers[i] = (CLRDATA_ADDRESS) pFillPointerArray[i];
+        DPTR(uint8_t*) fillPointersTable = dac_cast<TADDR>(fq) + offsetof(dac_finalize_queue, m_FillPointers);
+        for (unsigned int i = 0; i<(*g_gcDacGlobals->max_gen + 2 + dac_finalize_queue::ExtraSegCount); i++)
+        {
+            detailsData->finalization_fill_pointers[i] = (CLRDATA_ADDRESS)*TableIndex(fillPointersTable, i, sizeof(uint8_t*));
+        }
     }
 
     return S_OK;

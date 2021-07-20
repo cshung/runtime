@@ -45029,10 +45029,10 @@ void PopulateDacVars(GcDacVars *gcDacVars)
     gcDacVars->generation_size = sizeof(generation);
     gcDacVars->total_generation_count = total_generation_count;
     gcDacVars->max_gen = &g_max_generation;
+    gcDacVars->current_c_gc_state = const_cast<c_gc_state*>(&gc_heap::current_c_gc_state);
 #ifndef MULTIPLE_HEAPS
     gcDacVars->mark_array = &gc_heap::mark_array;
     gcDacVars->ephemeral_heap_segment = reinterpret_cast<dac_heap_segment**>(&gc_heap::ephemeral_heap_segment);
-    gcDacVars->current_c_gc_state = const_cast<c_gc_state*>(&gc_heap::current_c_gc_state);
 #ifdef USE_REGIONS
     gcDacVars->saved_sweep_ephemeral_seg = 0;
     gcDacVars->saved_sweep_ephemeral_start = 0;

@@ -3432,6 +3432,27 @@ public:
     PER_HEAP
     BOOL heap_analyze_success;
 
+    PER_HEAP
+    uint32_t* card_table;
+
+    PER_HEAP
+    uint32_t* mark_array;
+
+    PER_HEAP
+    uint8_t* next_sweep_obj;
+
+    PER_HEAP
+    heap_segment* saved_sweep_ephemeral_seg;
+
+    PER_HEAP
+    uint8_t* saved_sweep_ephemeral_start;
+
+    PER_HEAP
+    uint8_t* background_saved_lowest_address;
+
+    PER_HEAP
+    uint8_t* background_saved_highest_address;
+
     // The generation table. Must always be last.
     PER_HEAP
     generation generation_table [total_generation_count];
@@ -3608,15 +3629,7 @@ public:
 #endif //!USE_REGIONS
 
     PER_HEAP
-    uint32_t* card_table;
-
-    PER_HEAP
     short* brick_table;
-
-#ifdef BACKGROUND_GC
-    PER_HEAP
-    uint32_t* mark_array;
-#endif //BACKGROUND_GC
 
 #ifdef CARD_BUNDLE
     PER_HEAP
@@ -4213,19 +4226,7 @@ protected:
 
     PER_HEAP
     heap_segment* saved_overflow_ephemeral_seg;
-
-    PER_HEAP
-    heap_segment* saved_sweep_ephemeral_seg;
-
-    PER_HEAP
-    uint8_t* saved_sweep_ephemeral_start;
 #endif //!USE_REGIONS
-
-    PER_HEAP
-    uint8_t* background_saved_lowest_address;
-
-    PER_HEAP
-    uint8_t* background_saved_highest_address;
 
     // This is used for synchronization between the bgc thread
     // for this heap and the user threads allocating on this
@@ -4580,9 +4581,6 @@ protected:
     BOOL alloc_wait_event_p;
 
     PER_HEAP
-    uint8_t* next_sweep_obj;
-
-    PER_HEAP
     uint8_t* current_sweep_pos;
 
 #ifdef DOUBLY_LINKED_FL
@@ -4783,7 +4781,6 @@ protected:
 #define ASSERT_OFFSETS_MATCH(field) \
   static_assert(offsetof(dac_gc_heap, field) == offsetof(gc_heap, field), #field " offset mismatch")
 
-#ifndef USE_REGIONS
 #ifdef MULTIPLE_HEAPS
 ASSERT_OFFSETS_MATCH(alloc_allocated);
 ASSERT_OFFSETS_MATCH(ephemeral_heap_segment);
@@ -4796,9 +4793,15 @@ ASSERT_OFFSETS_MATCH(interesting_mechanism_bits_per_heap);
 ASSERT_OFFSETS_MATCH(internal_root_array);
 ASSERT_OFFSETS_MATCH(internal_root_array_index);
 ASSERT_OFFSETS_MATCH(heap_analyze_success);
+ASSERT_OFFSETS_MATCH(card_table);
+ASSERT_OFFSETS_MATCH(mark_array);
+ASSERT_OFFSETS_MATCH(next_sweep_obj);
+ASSERT_OFFSETS_MATCH(saved_sweep_ephemeral_seg);
+ASSERT_OFFSETS_MATCH(saved_sweep_ephemeral_start);
+ASSERT_OFFSETS_MATCH(background_saved_lowest_address);
+ASSERT_OFFSETS_MATCH(background_saved_highest_address);
 ASSERT_OFFSETS_MATCH(generation_table);
 #endif // MULTIPLE_HEAPS
-#endif //USE_REGIONS
 
 #ifdef FEATURE_PREMORTEM_FINALIZATION
 class CFinalize
