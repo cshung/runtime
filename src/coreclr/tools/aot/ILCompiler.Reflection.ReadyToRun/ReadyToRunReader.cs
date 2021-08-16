@@ -877,7 +877,7 @@ namespace ILCompiler.Reflection.ReadyToRun
             while (!curParser.IsNull())
             {
                 IAssemblyMetadata mdReader = GetGlobalMetadata();
-                var decoder = new R2RSignatureDecoder<TType, TMethod, TGenericContext>(provider, default(TGenericContext), mdReader.MetadataReader, this, (int)curParser.Offset);
+                var decoder = new R2RSignatureDecoder<string, TType, TMethod, TGenericContext>(provider, default(TGenericContext), mdReader.MetadataReader, this, (int)curParser.Offset);
 
                 TMethod customMethod = decoder.ParseMethod();
 
