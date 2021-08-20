@@ -4,6 +4,23 @@
 #include "createdump.h"
 #include "psapi.h"
 
+void andrew_break()
+{
+
+}
+
+BOOL AndrewRoutine(
+  PVOID CallbackParam,
+  PMINIDUMP_CALLBACK_INPUT CallbackInput,
+  PMINIDUMP_CALLBACK_OUTPUT CallbackOutput)
+{
+    if (CallbackInput->CallbackType == RemoveMemoryCallback)
+    {
+        andrew_break ();
+    }
+    return true;
+}
+
 //
 // The Windows create dump code
 //
@@ -41,10 +58,14 @@ CreateDump(const char* dumpPathTemplate, int pid, const char* dumpType, MINIDUMP
         goto exit;
     }
 
+    MINIDUMP_CALLBACK_INFORMATION AndrewInformation;
+    AndrewInformation.CallbackRoutine = AndrewRoutine;
+    AndrewInformation.CallbackParam = nullptr;
+
     // Retry the write dump on ERROR_PARTIAL_COPY
     for (int i = 0; i < 5; i++)
     {
-        if (MiniDumpWriteDump(hProcess, pid, hFile, minidumpType, NULL, NULL, NULL))
+        if (MiniDumpWriteDump(hProcess, pid, hFile, minidumpType, NULL, NULL, &AndrewInformation))
         {
             result = true;
             break;
