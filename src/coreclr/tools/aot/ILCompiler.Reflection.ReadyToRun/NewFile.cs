@@ -524,7 +524,6 @@ namespace ILCompiler.Reflection.ReadyToRun
             uint fixupType = ReadByte();
             // EmitInlineSignatureBinaryBytes(builder, 1);
             bool moduleOverride = (fixupType & (byte)ReadyToRunFixupKind.ModuleOverride) != 0;
-            // SignatureDecoder moduleDecoder = this;
 
             // Check first byte for a module override being encoded. The metadata reader for the module
             // override is configured in the R2RSignatureDecoder constructor.
@@ -536,11 +535,295 @@ namespace ILCompiler.Reflection.ReadyToRun
 
             return ParseSignature((ReadyToRunFixupKind)fixupType);;
         }
-
+        
         private TSignature ParseSignature(ReadyToRunFixupKind fixupType)
         {
-            // TODO: Copy the implementation over
-            return default(TSignature);
+            ReadyToRunSignature result = new TodoSignature(this, fixupType);
+            switch (fixupType)
+            {
+                case ReadyToRunFixupKind.ThisObjDictionaryLookup:
+                    builder.Append("THISOBJ_DICTIONARY_LOOKUP @ ");
+                    ParseType();
+                    builder.Append(": ");
+                    // It looks like ReadyToRunSignature is potentially a composite pattern
+                    ParseSignature();
+                    break;
+
+                case ReadyToRunFixupKind.TypeDictionaryLookup:
+                    builder.Append("TYPE_DICTIONARY_LOOKUP: ");
+                    ParseSignature();
+                    break;
+
+                case ReadyToRunFixupKind.MethodDictionaryLookup:
+                    builder.Append("METHOD_DICTIONARY_LOOKUP: ");
+                    ParseSignature();
+                    break;
+
+                case ReadyToRunFixupKind.TypeHandle:
+                    ParseType();
+                    builder.Append(" (TYPE_HANDLE)");
+                    break;
+
+                case ReadyToRunFixupKind.MethodHandle:
+                    ParseMethod();
+                    builder.Append(" (METHOD_HANDLE)");
+                    break;
+
+                case ReadyToRunFixupKind.FieldHandle:
+                    ParseField();
+                    builder.Append(" (FIELD_HANDLE)");
+                    break;
+
+
+                case ReadyToRunFixupKind.MethodEntry:
+                    ParseMethod();
+                    builder.Append(" (METHOD_ENTRY)");
+                    break;
+
+                case ReadyToRunFixupKind.MethodEntry_DefToken:
+                    uint methodDefToken = ParseMethodDefToken(builder, owningTypeOverride: null);
+                    builder.Append(" (METHOD_ENTRY");
+                    builder.Append(Context.Options.Naked ? ")" : "_DEF_TOKEN)");
+                    result = new MethodDefEntrySignature(this) { MethodDefToken = methodDefToken };
+                    break;
+
+                case ReadyToRunFixupKind.MethodEntry_RefToken:
+                    uint methodRefToken = ParseMethodRefToken(builder, owningTypeOverride: null);
+                    builder.Append(" (METHOD_ENTRY");
+                    builder.Append(Context.Options.Naked ? ")" : "_REF_TOKEN)");
+                    result = new MethodRefEntrySignature(this) { MethodRefToken = methodRefToken };
+                    break;
+
+
+                case ReadyToRunFixupKind.VirtualEntry:
+                    ParseMethod();
+                    builder.Append(" (VIRTUAL_ENTRY)");
+                    break;
+
+                case ReadyToRunFixupKind.VirtualEntry_DefToken:
+                    ParseMethodDefToken(builder, owningTypeOverride: null);
+                    builder.Append(" (VIRTUAL_ENTRY");
+                    builder.Append(Context.Options.Naked ? ")" : "_DEF_TOKEN)");
+                    break;
+
+                case ReadyToRunFixupKind.VirtualEntry_RefToken:
+                    ParseMethodRefToken(builder, owningTypeOverride: null);
+                    builder.Append(" (VIRTUAL_ENTRY");
+                    builder.Append(Context.Options.Naked ? ")" : "_REF_TOKEN)");
+                    break;
+
+                case ReadyToRunFixupKind.VirtualEntry_Slot:
+                    {
+                        uint slot = ReadUIntAndEmitInlineSignatureBinary();
+                        ParseType();
+
+                        builder.Append($@" #{slot} (VIRTUAL_ENTRY_SLOT)");
+                    }
+                    break;
+
+
+                case ReadyToRunFixupKind.Helper:
+                    ParseHelper();
+                    builder.Append(" (HELPER)");
+                    break;
+
+                case ReadyToRunFixupKind.StringHandle:
+                    ParseStringHandle();
+                    builder.Append(" (STRING_HANDLE)");
+                    break;
+
+
+                case ReadyToRunFixupKind.NewObject:
+                    ParseType();
+                    builder.Append(" (NEW_OBJECT)");
+                    break;
+
+                case ReadyToRunFixupKind.NewArray:
+                    ParseType();
+                    builder.Append(" (NEW_ARRAY)");
+                    break;
+
+
+                case ReadyToRunFixupKind.IsInstanceOf:
+                    ParseType();
+                    builder.Append(" (IS_INSTANCE_OF)");
+                    break;
+
+                case ReadyToRunFixupKind.ChkCast:
+                    ParseType();
+                    builder.Append(" (CHK_CAST)");
+                    break;
+
+
+                case ReadyToRunFixupKind.FieldAddress:
+                    ParseField();
+                    builder.Append(" (FIELD_ADDRESS)");
+                    break;
+
+                case ReadyToRunFixupKind.CctorTrigger:
+                    ParseType();
+                    builder.Append(" (CCTOR_TRIGGER)");
+                    break;
+
+
+                case ReadyToRunFixupKind.StaticBaseNonGC:
+                    ParseType();
+                    builder.Append(" (STATIC_BASE_NON_GC)");
+                    break;
+
+                case ReadyToRunFixupKind.StaticBaseGC:
+                    ParseType();
+                    builder.Append(" (STATIC_BASE_GC)");
+                    break;
+
+                case ReadyToRunFixupKind.ThreadStaticBaseNonGC:
+                    ParseType();
+                    builder.Append(" (THREAD_STATIC_BASE_NON_GC)");
+                    break;
+
+                case ReadyToRunFixupKind.ThreadStaticBaseGC:
+                    ParseType();
+                    builder.Append(" (THREAD_STATIC_BASE_GC)");
+                    break;
+
+
+                case ReadyToRunFixupKind.FieldBaseOffset:
+                    ParseType();
+                    builder.Append(" (FIELD_BASE_OFFSET)");
+                    break;
+
+                case ReadyToRunFixupKind.FieldOffset:
+                    ParseField();
+                    builder.Append(" (FIELD_OFFSET)");
+                    // TODO
+                    break;
+
+
+                case ReadyToRunFixupKind.TypeDictionary:
+                    ParseType();
+                    builder.Append(" (TYPE_DICTIONARY)");
+                    break;
+
+                case ReadyToRunFixupKind.MethodDictionary:
+                    ParseMethod();
+                    builder.Append(" (METHOD_DICTIONARY)");
+                    break;
+
+
+                case ReadyToRunFixupKind.Check_TypeLayout:
+                case ReadyToRunFixupKind.Verify_TypeLayout:
+                    ParseType();
+                    ReadyToRunTypeLayoutFlags layoutFlags = (ReadyToRunTypeLayoutFlags)ReadUInt();
+                    builder.Append($" Flags {layoutFlags}");
+                    int actualSize = (int)ReadUInt();
+                    builder.Append($" Size {actualSize}");
+
+                    if (layoutFlags.HasFlag(ReadyToRunTypeLayoutFlags.READYTORUN_LAYOUT_HFA))
+                    {
+                        builder.Append($" HFAType {ReadUInt()}");
+                    }
+
+                    if (layoutFlags.HasFlag(ReadyToRunTypeLayoutFlags.READYTORUN_LAYOUT_Alignment))
+                    {
+                        if (!layoutFlags.HasFlag(ReadyToRunTypeLayoutFlags.READYTORUN_LAYOUT_Alignment_Native))
+                        {
+                            builder.Append($" Align {ReadUInt()}");
+                        }
+                    }
+
+                    if (layoutFlags.HasFlag(ReadyToRunTypeLayoutFlags.READYTORUN_LAYOUT_GCLayout))
+                    {
+                        if (!layoutFlags.HasFlag(ReadyToRunTypeLayoutFlags.READYTORUN_LAYOUT_GCLayout_Empty))
+                        {
+                            int cbGCRefMap = (actualSize / _contextReader.TargetPointerSize + 7) / 8;
+                            builder.Append(" GCLayout ");
+                            for (int i = 0; i < cbGCRefMap; i++)
+                            {
+                                builder.Append(ReadByte().ToString("X"));
+                            }
+                        }
+                    }
+
+                    if (fixupType == ReadyToRunFixupKind.Check_TypeLayout)
+                        builder.Append(" (CHECK_TYPE_LAYOUT)");
+                    else
+                        builder.Append(" (VERIFY_TYPE_LAYOUT)");
+                    break;
+
+                case ReadyToRunFixupKind.Check_VirtualFunctionOverride:
+                case ReadyToRunFixupKind.Verify_VirtualFunctionOverride:
+                    ReadyToRunVirtualFunctionOverrideFlags flags = (ReadyToRunVirtualFunctionOverrideFlags)ReadUInt();
+                    ParseMethod();
+                    builder.Append($" ImplType :");
+                    ParseType();
+                    if (flags.HasFlag(ReadyToRunVirtualFunctionOverrideFlags.VirtualFunctionOverriden))
+                    {
+                        builder.Append($" ImplMethod :");
+                        ParseMethod();
+                    }
+                    else
+                    {
+                        builder.Append("Not Overriden");
+                    }
+
+                    if (fixupType == ReadyToRunFixupKind.Check_TypeLayout)
+                        builder.Append(" (CHECK_VIRTUAL_FUNCTION_OVERRIDE)");
+                    else
+                        builder.Append(" (VERIFY_VIRTUAL_FUNCTION_OVERRIDE)");
+                    break;
+
+                case ReadyToRunFixupKind.Check_FieldOffset:
+                    builder.Append($"{ReadUInt()} ");
+                    ParseField();
+                    builder.Append(" (CHECK_FIELD_OFFSET)");
+                    break;
+
+                case ReadyToRunFixupKind.Verify_FieldOffset:
+                    builder.Append($"{ReadUInt()} ");
+                    builder.Append($"{ReadUInt()} ");
+                    ParseField();
+                    builder.Append(" (VERIFY_FIELD_OFFSET)");
+                    break;
+
+                case ReadyToRunFixupKind.Check_InstructionSetSupport:
+                    builder.Append("CHECK_InstructionSetSupport");
+                    uint countOfInstructionSets = ReadUIntAndEmitInlineSignatureBinary();
+                    for (uint i = 0; i < countOfInstructionSets; i++)
+                    {
+                        uint instructionSetEncoded = ReadUIntAndEmitInlineSignatureBinary();
+                        ReadyToRunInstructionSet instructionSet = (ReadyToRunInstructionSet)(instructionSetEncoded >> 1);
+                        bool supported = (instructionSetEncoded & 1) == 1;
+                        builder.Append($" {instructionSet}{(supported ? "+" : "-")}");
+                    }
+                    break;
+
+                case ReadyToRunFixupKind.DelegateCtor:
+                    ParseMethod();
+                    builder.Append(" => ");
+                    ParseType();
+                    builder.Append(" (DELEGATE_CTOR)");
+                    break;
+
+                case ReadyToRunFixupKind.DeclaringTypeHandle:
+                    ParseType();
+                    builder.Append(" (DECLARING_TYPE_HANDLE)");
+                    break;
+
+                case ReadyToRunFixupKind.IndirectPInvokeTarget:
+                    ParseMethod();
+                    builder.Append(" (INDIRECT_PINVOKE_TARGET)");
+                    break;
+
+                case ReadyToRunFixupKind.PInvokeTarget:
+                    ParseMethod();
+                    builder.Append(" (PINVOKE_TARGET)");
+                    break;
+
+                default:
+                    throw new BadImageFormatException();
+            }
+            return result;
         }
     }
+        
 }
