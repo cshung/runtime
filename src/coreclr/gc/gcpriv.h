@@ -5019,6 +5019,9 @@ protected:
     PER_HEAP_ISOLATED
     size_t bookkeeping_sizes[total_bookkeeping_elements];
 #endif //USE_REGIONS
+public:
+    PER_HEAP
+    uint32_t andrew;
 }; // class gc_heap
 
 #ifdef FEATURE_PREMORTEM_FINALIZATION

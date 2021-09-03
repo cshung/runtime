@@ -2780,6 +2780,8 @@ size_t     gc_heap::expand_mechanisms_per_heap[max_expand_mechanisms_count];
 
 size_t     gc_heap::interesting_mechanism_bits_per_heap[max_gc_mechanism_bits_count];
 
+uint32_t   gc_heap::andrew = 0;
+
 #endif // MULTIPLE_HEAPS
 
 /* end of per heap static initialization */
@@ -13508,6 +13510,9 @@ gc_heap::init_gc_heap (int  h_number)
 #ifdef RECORD_LOH_STATE
     loh_state_index = 0;
 #endif //RECORD_LOH_STATE
+
+    andrew = 0;
+
 #endif //MULTIPLE_HEAPS
 
 #ifdef MULTIPLE_HEAPS
