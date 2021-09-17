@@ -134,7 +134,6 @@ PinnedHeapHandleBucket::PinnedHeapHandleBucket(PinnedHeapHandleBucket *pNext, DW
 
     // Allocate the array in the large object heap.
     OVERRIDE_TYPE_LOAD_LEVEL_LIMIT(CLASS_LOADED);
-    FireEtwAndrewEvent(1, 2);
     HandleArrayObj = (PTRARRAYREF)AllocateObjectArray(Size, g_pObjectClass, /* bAllocateInPinnedHeap = */TRUE);
 
     // Retrieve the pointer to the data inside the array. This is legal since the array

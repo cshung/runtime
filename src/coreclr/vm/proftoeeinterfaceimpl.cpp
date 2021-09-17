@@ -9028,6 +9028,8 @@ HRESULT ProfToEEInterfaceImpl::GetObjectGeneration(ObjectID objectId,
     uint8_t* pReserved;
     unsigned int generation = hp->GetGenerationWithRange((Object*)objectId, &pStart, &pAllocated, &pReserved);
 
+    FireEtwAndrewEvent(1, 2);
+
     UINT_PTR rangeLength = pAllocated - pStart;
     UINT_PTR rangeLengthReserved = pReserved - pStart;
 
