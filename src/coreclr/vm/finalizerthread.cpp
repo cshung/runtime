@@ -223,6 +223,7 @@ void FinalizerThread::WaitForFinalizerEvent (CLREvent *event)
 
 static BOOL s_FinalizerThreadOK = FALSE;
 static BOOL s_InitializedFinalizerThreadForPlatform = FALSE;
+extern LowMemoryCallback g_lowMemoryCallback;
 
 VOID FinalizerThread::FinalizerThreadWorker(void *args)
 {
@@ -257,6 +258,11 @@ VOID FinalizerThread::FinalizerThreadWorker(void *args)
 #endif //0
 
         WaitForFinalizerEvent (hEventFinalizer);
+
+        if (g_lowMemoryCallback && GCHeapUtilities::GetGCHeap()->ShouldTriggerLowMemoryCallback())
+        {
+            g_lowMemoryCallback();
+        }
 
 #if defined(__linux__) && defined(FEATURE_EVENT_TRACE)
         if (g_TriggerHeapDump && (CLRGetTickCount64() > (LastHeapDumpTime + LINUX_HEAP_DUMP_TIME_OUT)))

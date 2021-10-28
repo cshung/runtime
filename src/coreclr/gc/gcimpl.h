@@ -310,6 +310,8 @@ protected:
     virtual void DiagGetGCSettings(EtwGCSettingsInfo* etw_settings);
 
     virtual unsigned int GetGenerationWithRange(Object* object, uint8_t** ppStart, uint8_t** ppAllocated, uint8_t** ppReserved);
+
+    virtual bool ShouldTriggerLowMemoryCallback();
 public:
     Object * NextObj (Object * object);
 

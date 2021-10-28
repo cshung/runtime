@@ -535,6 +535,8 @@ public:
     virtual void TraceRefCountedHandles(HANDLESCANPROC callback, uintptr_t param1, uintptr_t param2) = 0;
 };
 
+typedef void (*LowMemoryCallback)();
+
 // IGCHeap is the interface that the VM will use when interacting with the GC.
 class IGCHeap {
 public:
@@ -922,6 +924,8 @@ public:
     virtual void ControlPrivateEvents(GCEventKeyword keyword, GCEventLevel level) = 0;
 
     virtual unsigned int GetGenerationWithRange(Object* object, uint8_t** ppStart, uint8_t** ppAllocated, uint8_t** ppReserved) = 0;
+
+    virtual bool ShouldTriggerLowMemoryCallback() = 0;
 
     IGCHeap() {}
     virtual ~IGCHeap() {}

@@ -716,6 +716,8 @@ FCFuncStart(gGCInterfaceFuncs)
 
     FCFuncElement("AllocateNewArray", GCInterface::AllocateNewArray)
 
+    QCFuncElement("_RegisterLowMemoryCallback", GCInterface::_RegisterLowMemoryCallback)
+
 #ifdef FEATURE_BASICFREEZE
     QCFuncElement("_RegisterFrozenSegment", GCInterface::RegisterFrozenSegment)
     QCFuncElement("_UnregisterFrozenSegment", GCInterface::UnregisterFrozenSegment)

@@ -719,5 +719,14 @@ namespace System
 
             return Unsafe.As<T[]>(AllocateNewArray(typeof(T[]).TypeHandle.Value, length, flags));
         }
+
+        public static void RegisterLowMemoryCallback(Action callback)
+        {
+            // TODO: Who guarantee the life time of callback?
+            _RegisterLowMemoryCallback(callback);
+        }
+
+        [DllImport(RuntimeHelpers.QCall, CharSet = CharSet.Unicode)]
+        internal static extern void _RegisterLowMemoryCallback(Action callback);
     }
 }

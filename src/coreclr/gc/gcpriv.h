@@ -5019,6 +5019,8 @@ protected:
     PER_HEAP_ISOLATED
     size_t bookkeeping_sizes[total_bookkeeping_elements];
 #endif //USE_REGIONS
+    PER_HEAP_ISOLATED
+    bool should_trigger_low_memory_callback_p;
 }; // class gc_heap
 
 #ifdef FEATURE_PREMORTEM_FINALIZATION

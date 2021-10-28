@@ -1299,6 +1299,30 @@ void QCALLTYPE GCInterface::_AddMemoryPressure(UINT64 bytesAllocated)
     END_QCALL;
 }
 
+void QCALLTYPE GCInterface::_RegisterLowMemoryCallback(LowMemoryCallback callback)
+{
+    QCALL_CONTRACT;
+
+    BEGIN_QCALL;
+    RegisterLowMemoryCallback(callback);
+    END_QCALL;
+}
+
+LowMemoryCallback g_lowMemoryCallback = nullptr;
+
+void GCInterface::RegisterLowMemoryCallback(LowMemoryCallback callback)
+{
+    CONTRACTL
+    {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_ANY;
+    }
+    CONTRACTL_END;
+    
+    g_lowMemoryCallback = callback;
+}
+
 #ifdef HOST_64BIT
 const unsigned MIN_MEMORYPRESSURE_BUDGET = 4 * 1024 * 1024;        // 4 MB
 #else // HOST_64BIT

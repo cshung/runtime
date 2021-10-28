@@ -122,7 +122,6 @@ typedef GCMemoryInfoData * GCMEMORYINFODATA;
 typedef GCMemoryInfoData * GCMEMORYINFODATAREF;
 #endif // USE_CHECKED_OBJECTREFS
 
-
 class GCInterface {
 private:
     static INT32    m_gc_counts[3];
@@ -196,6 +195,12 @@ public:
     static void CheckCollectionCount();
     static void RemoveMemoryPressure(UINT64 bytesAllocated);
     static void AddMemoryPressure(UINT64 bytesAllocated);
+
+    static
+    void QCALLTYPE _RegisterLowMemoryCallback(LowMemoryCallback callback);
+
+    static
+    void RegisterLowMemoryCallback(LowMemoryCallback callback);
 
 private:
     // Out-of-line helper to avoid EH prolog/epilog in functions that otherwise don't throw.

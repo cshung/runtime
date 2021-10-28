@@ -2175,6 +2175,8 @@ uint8_t*    gc_heap::bookkeeping_covered_committed = nullptr;
 size_t      gc_heap::bookkeeping_sizes[total_bookkeeping_elements];
 #endif //USE_REGIONS
 
+bool        gc_heap::should_trigger_low_memory_callback_p = false;
+
 size_t      gc_heap::reserved_memory = 0;
 size_t      gc_heap::reserved_memory_limit = 0;
 BOOL        gc_heap::g_low_memory_status;
@@ -19897,6 +19899,7 @@ int gc_heap::generation_to_condemn (int n_initial,
                     dd_new_allocation (dd_max), dd_desired_allocation (dd_max)));
                 n = max_generation;
                 local_condemn_reasons->set_condition (gen_almost_max_alloc);
+                should_trigger_low_memory_callback_p = true;
             }
         }
 
@@ -43325,6 +43328,13 @@ unsigned int GCHeap::WhichGeneration (Object* object)
     return g;
 }
 
+bool GCHeap::ShouldTriggerLowMemoryCallback()
+{
+    bool result = pGenGCHeap->should_trigger_low_memory_callback_p;
+    pGenGCHeap->should_trigger_low_memory_callback_p = false;
+    return result;
+}
+
 unsigned int GCHeap::GetGenerationWithRange (Object* object, uint8_t** ppStart, uint8_t** ppAllocated, uint8_t** ppReserved)
 {
     int generation = -1;
@@ -45025,8 +45035,9 @@ GCHeap::GarbageCollectGeneration (unsigned int gen, gc_reason reason)
     leave_spin_lock (&gc_heap::gc_lock);
 #endif //!MULTIPLE_HEAPS
 
+    // TODO: Performance tuning, when exactly should we set should_trigger_low_memory_callback_p true?
 #ifdef FEATURE_PREMORTEM_FINALIZATION
-    GCToEEInterface::EnableFinalization(!pGenGCHeap->settings.concurrent && pGenGCHeap->settings.found_finalizers);
+    GCToEEInterface::EnableFinalization(!pGenGCHeap->settings.concurrent && (pGenGCHeap->settings.found_finalizers || pGenGCHeap->should_trigger_low_memory_callback_p));
 #endif // FEATURE_PREMORTEM_FINALIZATION
 
     return dd_collection_count (dd);
