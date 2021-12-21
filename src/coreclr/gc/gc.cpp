@@ -2427,10 +2427,11 @@ size_t      gc_heap::allocation_running_amount;
 
 heap_segment* gc_heap::ephemeral_heap_segment = 0;
 
-#ifdef USE_REGIONS
-#ifdef STRESS_REGIONS
 OBJECTHANDLE* gc_heap::pinning_handles_for_alloc = 0;
 int         gc_heap::ph_index_per_heap = 0;
+
+#ifdef USE_REGIONS
+#ifdef STRESS_REGIONS
 int         gc_heap::pinning_seg_interval = 2;
 size_t      gc_heap::num_gen0_regions = 0;
 int         gc_heap::sip_seg_interval = 0;
@@ -13962,9 +13963,6 @@ gc_heap::init_gc_heap (int h_number)
         mark_array = NULL;
 #endif //BACKGROUND_GC
 
-#ifdef USE_REGIONS
-#ifdef STRESS_REGIONS
-    // Handle table APIs expect coop so we temporarily switch to coop.
     disable_preemptive (true);
     pinning_handles_for_alloc = new (nothrow) (OBJECTHANDLE[PINNING_HANDLE_INITIAL_LENGTH]);
 
@@ -13974,6 +13972,11 @@ gc_heap::init_gc_heap (int h_number)
     }
     enable_preemptive();
     ph_index_per_heap = 0;
+
+#ifdef USE_REGIONS
+#ifdef STRESS_REGIONS
+    // Handle table APIs expect coop so we temporarily switch to coop.
+    
     pinning_seg_interval = 2;
     num_gen0_regions = 0;
     sip_seg_interval = 2;
@@ -25707,6 +25710,24 @@ void gc_heap::mark_phase (int condemned_gen_number, BOOL mark_only_p)
     reset_card_marking_enumerators();
 #endif // FEATURE_CARD_MARKING_STEALING
 
+    if (GCConfig::GetGCEvil())
+    {
+        // The evil version always pin the last object in the ephemeral_heap_segment
+        // Effectively force demotion
+        uint8_t* victim = find_object (heap_segment_allocated (ephemeral_heap_segment) - 1);
+        uint8_t* ephemeral_heap_segment_mem = heap_segment_mem (ephemeral_heap_segment);
+        CObjectHeader* victim_object = (CObjectHeader*)victim;
+        while (victim != nullptr && victim > ephemeral_heap_segment_mem && victim_object->IsFree())
+        {
+            victim = find_object (victim - 1);
+            victim_object = (CObjectHeader*)victim;
+        }
+        if (victim_object != nullptr && !victim_object->IsFree())
+        {
+            pin_by_gc (victim);
+        }
+    }
+
 #ifdef STRESS_REGIONS
     heap_segment* gen0_region = generation_start_segment (generation_of (0));
     while (gen0_region)
@@ -31170,21 +31191,19 @@ heap_segment* gc_heap::relocate_advance_to_non_sip (heap_segment* region)
 }
 
 #ifdef STRESS_REGIONS
+
+#endif //STRESS_REGIONS
+#endif //USE_REGIONS
+
 void gc_heap::pin_by_gc (uint8_t* object)
 {
-    heap_segment* region = region_of (object);
     HndAssignHandleGC(pinning_handles_for_alloc[ph_index_per_heap], object);
-    dprintf (REGIONS_LOG, ("h%d pinning object at %Ix on eph seg %Ix (ph#%d)",
-        heap_number, object, heap_segment_mem (region), ph_index_per_heap));
-
     ph_index_per_heap++;
     if (ph_index_per_heap == PINNING_HANDLE_INITIAL_LENGTH)
     {
         ph_index_per_heap = 0;
     }
 }
-#endif //STRESS_REGIONS
-#endif //USE_REGIONS
 
 void gc_heap::make_free_lists (int condemned_gen_number)
 {
@@ -40853,6 +40872,10 @@ BOOL gc_heap::ephemeral_gen_fit_p (gc_tuning_point tp)
         BOOL can_fit = sufficient_space_regions (gen0_end_space, end_space);
 #else //USE_REGIONS
         BOOL can_fit = sufficient_space_end_seg (start, heap_segment_committed (ephemeral_heap_segment), heap_segment_reserved (ephemeral_heap_segment), end_space);
+        if ((tp == tuning_deciding_condemned_gen) && (GCConfig::GetGCWeapon()))
+        {
+            can_fit = can_fit || (generation_free_list_space (generation_of (0)) > GCConfig::GetGCWeapon() * dd_desired_allocation (dd));
+        }
 #endif //USE_REGIONS
         return can_fit;
     }

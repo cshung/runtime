@@ -53,7 +53,7 @@ inline void FATAL_GC_ERROR()
 // Server GC we will balance regions between heaps.
 // For now disable regions for StandAlone GC, NativeAOT and MacOS builds
 #if defined (HOST_64BIT) && !defined (BUILD_AS_STANDALONE) && !defined(__APPLE__) && !defined(FEATURE_NATIVEAOT)
-#define USE_REGIONS
+// #define USE_REGIONS
 #endif //HOST_64BIT && BUILD_AS_STANDALONE
 
 #ifdef USE_REGIONS
@@ -1445,11 +1445,9 @@ public:
     // This relocates the SIP regions and return the next non SIP region.
     PER_HEAP
     heap_segment* relocate_advance_to_non_sip (heap_segment* region);
-#ifdef STRESS_REGIONS
+#endif //USE_REGIONS
     PER_HEAP
     void pin_by_gc (uint8_t* object);
-#endif //STRESS_REGIONS
-#endif //USE_REGIONS
 
     static
     heap_segment* make_heap_segment (uint8_t* new_pages,
@@ -3584,8 +3582,6 @@ public:
     PER_HEAP
     generation generation_table [total_generation_count];
 
-#ifdef USE_REGIONS
-#ifdef STRESS_REGIONS
     // TODO: could consider dynamically grow this.
     // Right now the way it works -
     // For each gen0 region, pin an object somewhere near the beginning and middle.
@@ -3595,6 +3591,10 @@ public:
     OBJECTHANDLE* pinning_handles_for_alloc;
     PER_HEAP
     int ph_index_per_heap;
+
+#ifdef USE_REGIONS
+#ifdef STRESS_REGIONS
+    
     PER_HEAP
     int pinning_seg_interval;
     PER_HEAP
