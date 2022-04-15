@@ -1,0 +1,1 @@
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\corerun.exe" /v Debugger /t REG_SZ /d "c:\toolssw\debuggers\amd64\windbg.exe" /f

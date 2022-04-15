@@ -3,6 +3,39 @@
 
 #include "gcprofiler.h"
 
+class EasyVector {
+public:
+    EasyVector() {
+        this->storage = new ObjectID[100];
+        this->capacity = 100;
+        this->size = 0;
+    }
+    void Add(ObjectID object) {
+        if (this->size == this->capacity)
+        {
+            ObjectID* newStorage = new ObjectID[this->capacity * 2];
+            for (int i = 0; i < this->capacity; i++)
+            {
+                newStorage[i] = this->storage[i];
+            }
+            delete[] this->storage;
+            this->storage = newStorage;
+            this->capacity = this->capacity * 2;
+        }
+        this->storage[this->size++] = object;
+    }
+    void Clear()
+    {
+        this->size = 0;
+    }
+private:
+    ObjectID* storage;
+    size_t capacity;
+    size_t size;
+};
+
+EasyVector andrewLog;
+
 GUID GCProfiler::GetClsid()
 {
     // {BCD8186F-1EEC-47E9-AFA7-396F879382C3}
@@ -59,9 +92,14 @@ HRESULT GCProfiler::Shutdown()
     return S_OK;
 }
 
+FILE* fReferences;
+FILE* fRoots;
+
 HRESULT GCProfiler::GarbageCollectionStarted(int cGenerations, BOOL generationCollected[], COR_PRF_GC_REASON reason)
 {
     SHUTDOWNGUARD();
+
+    andrewLog.Clear();
 
     _gcStarts++;
     if (_gcStarts - _gcFinishes > 2)
@@ -70,12 +108,18 @@ HRESULT GCProfiler::GarbageCollectionStarted(int cGenerations, BOOL generationCo
         printf("GCProfiler::GarbageCollectionStarted: FAIL: Expected GCStart <= GCFinish+2. GCStart=%d, GCFinish=%d\n", (int)_gcStarts, (int)_gcFinishes);
     }
 
+    fReferences = fopen("references.txt","w+");
+    fRoots = fopen("roots.txt","w+");
+
     return S_OK;
 }
 
 HRESULT GCProfiler::GarbageCollectionFinished()
 {
     SHUTDOWNGUARD();
+
+    fclose(fReferences);
+    fclose(fRoots);
 
     _gcFinishes++;
     if (_gcStarts < _gcFinishes)
@@ -159,4 +203,21 @@ int GCProfiler::NumPOHObjectsSeen(std::unordered_set<ObjectID> objects)
     }
 
     return count;
+}
+HRESULT GCProfiler::MovedReferences2(ULONG cMovedObjectIDRanges, ObjectID oldObjectIDRangeStart[], ObjectID newObjectIDRangeStart[], SIZE_T cObjectIDRangeLength[])
+{
+    for (size_t i = 0; i < cMovedObjectIDRanges; i++)
+    {
+        andrewLog.Add(newObjectIDRangeStart[i]);
+    }
+    return S_OK;
+}
+
+HRESULT GCProfiler::SurvivingReferences2(ULONG cSurvivingObjectIDRanges, ObjectID objectIDRangeStart[], SIZE_T cObjectIDRangeLength[])
+{
+    for (size_t i = 0; i < cSurvivingObjectIDRanges; i++)
+    {
+        andrewLog.Add(objectIDRangeStart[i]);
+    }
+    return S_OK;
 }

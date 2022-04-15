@@ -1,0 +1,1 @@
+reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\corerun.exe" /f

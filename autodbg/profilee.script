@@ -1,0 +1,8 @@
+.load C:\dev\diagnostics\artifacts\bin\Windows_NT.x64.Debug\sos.dll
+sxe ld profiler
+g
+sxd ld profiler
+bm Profiler!*SurvivingReferences2
+bm Profiler!*MovedReferences2
+bm Profiler!*GarbageCollectionFinished
+g
