@@ -2,4 +2,5 @@
 sxe ld coreclr
 g
 !do 0
-.echo Game On
+bm coreclr!*refresh_memory_limit
+g

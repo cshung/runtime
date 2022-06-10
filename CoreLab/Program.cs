@@ -11,7 +11,22 @@ namespace CoreLab
     {
         private static void Main(string[] args)
         {
-            Console.WriteLine("Andrew wins");
+            MethodInfo refreshMemoryLimitMethod = typeof(GC).GetMethod("RefreshMemoryLimit", BindingFlags.Public | BindingFlags.Static);
+            if (refreshMemoryLimitMethod == null)
+            {
+                Console.WriteLine("Ooops, wrong version");
+            }
+            else
+            {
+                Console.WriteLine("Let's change the job object?");
+                Console.ReadLine();
+                refreshMemoryLimitMethod.Invoke(null, Array.Empty<object>());
+                Console.WriteLine("Let's change the job object again?");
+                Console.ReadLine();
+                refreshMemoryLimitMethod.Invoke(null, Array.Empty<object>());
+                Console.WriteLine("Yay!");
+            }
+
         }
     }
 }
