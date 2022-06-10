@@ -719,5 +719,13 @@ namespace System
         {
             return new TimeSpan(_GetTotalPauseDuration());
         }
+
+        public static void RefreshMemoryLimit()
+        {
+            _RefreshMemoryLimit();
+        }
+
+        [LibraryImport(RuntimeHelpers.QCall, EntryPoint = "GCInterface_RefreshMemoryLimit")]
+        internal static partial void _RefreshMemoryLimit();
     }
 }

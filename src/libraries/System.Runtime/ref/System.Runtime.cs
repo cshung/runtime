@@ -2609,6 +2609,7 @@ namespace System
         /// </summary>
         /// <returns> The total amount of time paused in GC since the beginning of the process.</returns>
         public static TimeSpan GetTotalPauseDuration() { return TimeSpan.Zero; }
+        public static void RefreshMemoryLimit() {}
     }
     public enum GCCollectionMode
     {

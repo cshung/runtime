@@ -121,7 +121,6 @@ typedef GCMemoryInfoData * GCMEMORYINFODATA;
 typedef GCMemoryInfoData * GCMEMORYINFODATAREF;
 #endif // USE_CHECKED_OBJECTREFS
 
-
 class GCInterface {
 private:
     static INT32    m_gc_counts[3];
@@ -169,6 +168,8 @@ public:
     static void RemoveMemoryPressure(UINT64 bytesAllocated);
     static void AddMemoryPressure(UINT64 bytesAllocated);
 
+    static void RefreshMemoryLimit();
+
 private:
     // Out-of-line helper to avoid EH prolog/epilog in functions that otherwise don't throw.
     NOINLINE static void GarbageCollectModeAny(int generation);
@@ -192,6 +193,8 @@ extern "C" int QCALLTYPE GCInterface_EndNoGCRegion();
 extern "C" void QCALLTYPE GCInterface_AddMemoryPressure(UINT64 bytesAllocated);
 
 extern "C" void QCALLTYPE GCInterface_RemoveMemoryPressure(UINT64 bytesAllocated);
+
+extern "C" void QCALLTYPE GCInterface_RefreshMemoryLimit();
 
 class COMInterlocked
 {

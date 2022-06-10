@@ -1309,6 +1309,28 @@ extern "C" void QCALLTYPE GCInterface_AddMemoryPressure(UINT64 bytesAllocated)
     END_QCALL;
 }
 
+extern "C" void QCALLTYPE GCInterface_RefreshMemoryLimit()
+{
+    QCALL_CONTRACT;
+
+    BEGIN_QCALL;
+    GCInterface::RefreshMemoryLimit();
+    END_QCALL;
+}
+
+void GCInterface::RefreshMemoryLimit()
+{
+    CONTRACTL
+    {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_ANY;
+    }
+    CONTRACTL_END;
+
+    GCHeapUtilities::GetGCHeap()->RefreshMemoryLimit();
+}
+
 #ifdef HOST_64BIT
 const unsigned MIN_MEMORYPRESSURE_BUDGET = 4 * 1024 * 1024;        // 4 MB
 #else // HOST_64BIT

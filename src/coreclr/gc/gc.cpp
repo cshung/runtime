@@ -43869,7 +43869,7 @@ HRESULT GCHeap::Initialize()
     {
 #ifdef FEATURE_EVENT_TRACE
         gc_heap::hard_limit_config_p = true;
-#endif //FEATURE_EVENT_TRACE
+#endif
     }
     else
     {
@@ -47782,4 +47782,74 @@ void PopulateDacVars(GcDacVars *gcDacVars)
     gcDacVars->gc_heap_field_offsets = reinterpret_cast<int**>(&gc_heap_field_offsets);
 #endif // MULTIPLE_HEAPS
     gcDacVars->generation_field_offsets = reinterpret_cast<int**>(&generation_field_offsets);
+}
+
+void GCHeap::RefreshMemoryLimit()
+{
+    gc_heap::refresh_memory_limit();
+}
+
+void gc_heap::refresh_memory_limit()
+{
+    // TODO: Avoid code duplication [ :( - difficult - these blocks were scattered)]
+    
+    if (GCConfig::GetGCTotalPhysicalMemory() != 0)
+    {
+        // TODO: In case it is configured
+        return;
+    }
+
+    // play-safe, it is unclear if changing these values while other threads are running is safe
+    // especially so for gc_heap::heap_hard_limit
+    // this is going to be a short suspension anyway
+    GCToEEInterface::SuspendEE(SUSPEND_FOR_GC);
+
+    gc_heap::total_physical_mem = GCToOSInterface::GetPhysicalMemoryLimit (&gc_heap::is_restricted_physical_mem);
+
+    if (
+        (!GCConfig::GetGCHeapHardLimit()) && 
+        (!GCConfig::GetGCHeapHardLimitPercent()) && 
+        (!GCConfig::GetGCHeapHardLimitSOH()) &&
+        (!GCConfig::GetGCHeapHardLimitSOHPercent())
+    )
+    {
+        if (gc_heap::is_restricted_physical_mem)
+        {
+            uint64_t physical_mem_for_gc = gc_heap::total_physical_mem * (uint64_t)75 / (uint64_t)100;
+            bool had_heap_hard_limit = gc_heap::heap_hard_limit != 0;
+            gc_heap::heap_hard_limit = (size_t)max ((20 * 1024 * 1024), physical_mem_for_gc);
+            if (!had_heap_hard_limit)
+            {
+                check_commit_cs.Initialize();
+                // TODO: Initialize the already committed data into the hard limit
+            }
+        }
+    }
+    
+    // TODO: (Segments only) Confirm that not changing segment size is okay. Resizing existing segments can be challenging.
+
+    gc_heap::mem_one_percent = gc_heap::total_physical_mem / 100;
+#ifndef MULTIPLE_HEAPS
+    gc_heap::mem_one_percent /= g_num_processors;
+#endif //!MULTIPLE_HEAPS
+
+    if (!GCConfig::GetGCHighMemPercent())
+    {
+        int available_mem_th = 10;
+        if (gc_heap::total_physical_mem >= ((uint64_t)80 * 1024 * 1024 * 1024))
+        {
+            int adjusted_available_mem_th = 3 + (int)((float)47 / (float)(GCToOSInterface::GetTotalProcessorCount()));
+            available_mem_th = min (available_mem_th, adjusted_available_mem_th);
+        }
+
+        gc_heap::high_memory_load_th = 100 - available_mem_th;
+        gc_heap::v_high_memory_load_th = 97;
+    }
+
+    gc_heap::m_high_memory_load_th = min ((gc_heap::high_memory_load_th + 5), gc_heap::v_high_memory_load_th);
+
+    // TODO: Did I miss anything important?
+
+    GCToEEInterface::RestartEE(TRUE);
+
 }

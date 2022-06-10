@@ -932,6 +932,9 @@ public:
 
     // Get the total paused duration.
     virtual int64_t GetTotalPauseDuration() = 0;
+
+    // Refresh the memory limit
+    virtual void RefreshMemoryLimit() = 0;
 };
 
 #ifdef WRITE_BARRIER_CHECK
