@@ -6903,7 +6903,7 @@ bool gc_heap::virtual_commit (void* address, size_t size, int bucket, int h_numb
     assert(bucket < total_oh_count || h_number == -1);
     assert(bucket != recorded_committed_free_bucket);
 
-    dprintf(3, ("commit-accounting:  commit in %d [%Ix, %Ix) for heap %d", bucket, address, ((uint8_t*)address + size), h_number));
+    aprintf(3, (fp, "commit-accounting:  commit in %d [%Ix, %Ix) for heap %d", bucket, address, ((uint8_t*)address + size), h_number));
 
     if (heap_hard_limit)
     {
@@ -6992,7 +6992,7 @@ bool gc_heap::virtual_decommit (void* address, size_t size, int bucket, int h_nu
 
     bool decommit_succeeded_p = GCToOSInterface::VirtualDecommit (address, size);
 
-    dprintf(3, ("commit-accounting:  decommit in %d [%Ix, %Ix) for heap %d", bucket, address, ((uint8_t*)address + size), h_number));
+    aprintf(3, (fp, "commit-accounting:  decommit in %d [%Ix, %Ix) for heap %d", bucket, address, ((uint8_t*)address + size), h_number));
 
     if (decommit_succeeded_p && heap_hard_limit)
     {
@@ -11228,7 +11228,7 @@ void gc_heap::clear_region_info (heap_segment* region)
 void gc_heap::return_free_region (heap_segment* region)
 {
     gc_oh_num oh = heap_segment_oh (region);
-    dprintf(3, ("commit-accounting:  from %d to free [%Ix, %Ix) for heap %d", oh, get_region_start (region), heap_segment_committed (region), heap_number));
+    aprintf(3, (fp, "commit-accounting:  from %d to free [%Ix, %Ix) for heap %d", oh, get_region_start (region), heap_segment_committed (region), heap_number));
     if (heap_hard_limit)
     {
         size_t committed = heap_segment_committed (region) - get_region_start (region);
@@ -11314,7 +11314,7 @@ heap_segment* gc_heap::get_free_region (int gen_number, size_t size)
                            gen_number);
 
         gc_oh_num oh = gen_to_oh (gen_number);
-        dprintf(3, ("commit-accounting:  from free to %d [%Ix, %Ix) for heap %d", oh, get_region_start (region), heap_segment_committed (region), heap_number));
+        aprintf(3, (fp, "commit-accounting:  from free to %d [%Ix, %Ix) for heap %d", oh, get_region_start (region), heap_segment_committed (region), heap_number));
         if (heap_hard_limit)
         {
             size_t committed = heap_segment_committed (region) - get_region_start (region);
@@ -22906,20 +22906,20 @@ heap_segment* gc_heap::unlink_first_rw_region (int gen_idx)
     assert (!heap_segment_read_only_p (region));
     dprintf (REGIONS_LOG, ("unlink_first_rw_region on heap: %d gen: %d region: %Ix", heap_number, gen_idx, heap_segment_mem (region)));
 
-#if defined(_DEBUG) && defined(HOST_64BIT)
+
     if (heap_hard_limit)
     {
         int old_oh = heap_segment_oh (region);
         int old_heap = heap_segment_heap (region)->heap_number;
-        dprintf(3, ("commit-accounting:  from %d to temp [%Ix, %Ix) for heap %d", old_oh, get_region_start (region), heap_segment_committed (region), old_heap));
-
+        aprintf(3, (fp, "commit-accounting:  from %d to temp [%Ix, %Ix) for heap %d", old_oh, get_region_start (region), heap_segment_committed (region), old_heap));
+#if defined(_DEBUG) && defined(HOST_64BIT)
         size_t committed = heap_segment_committed (region) - get_region_start (region);
         check_commit_cs.Enter();
         assert (g_heaps[old_heap]->committed_by_oh_per_heap[old_oh] >= committed);
         g_heaps[old_heap]->committed_by_oh_per_heap[old_oh] -= committed;
         check_commit_cs.Leave();
-    }
 #endif // _DEBUG && HOST_64BIT
+    }
 
     set_heap_for_contained_basic_regions (region, nullptr);
 
@@ -22943,20 +22943,19 @@ void gc_heap::thread_rw_region_front (int gen_idx, heap_segment* region)
     }
     dprintf (REGIONS_LOG, ("thread_rw_region_front on heap: %d gen: %d region: %Ix", heap_number, gen_idx, heap_segment_mem (region)));
 
-#if defined(_DEBUG) && defined(HOST_64BIT)
     if (heap_hard_limit)
     {
         int new_oh = gen_to_oh (gen_idx);
         int new_heap = this->heap_number;
-        dprintf(3, ("commit-accounting:  from temp to %d [%Ix, %Ix) for heap %d", new_oh, get_region_start (region), heap_segment_committed (region), new_heap));
-
+        aprintf(3, (fp, "commit-accounting:  from temp to %d [%Ix, %Ix) for heap %d", new_oh, get_region_start (region), heap_segment_committed (region), new_heap));
+#if defined(_DEBUG) && defined(HOST_64BIT)
         size_t committed = heap_segment_committed (region) - get_region_start (region);
         check_commit_cs.Enter();
         assert (heap_segment_heap (region) == nullptr);
         g_heaps[new_heap]->committed_by_oh_per_heap[new_oh] += committed;
         check_commit_cs.Leave();
-    }
 #endif // _DEBUG && HOST_64BIT
+    }
 
     set_heap_for_contained_basic_regions (region, this);
 }
@@ -44006,7 +44005,7 @@ void gc_heap::verify_regions (bool can_verify_gen_num, bool concurrent_p)
             {
                 FATAL_GC_ERROR();
             }
-            dprintf(3, ("commit-accounting:  checkpoint for %d for heap %d", oh, heap_number));
+            aprintf(3, (fp, "commit-accounting:  checkpoint for %d for heap %d", oh, heap_number));
             total_committed = 0;
         }
 

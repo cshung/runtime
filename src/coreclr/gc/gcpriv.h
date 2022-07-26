@@ -8,6 +8,8 @@
 #endif
 #endif
 
+#define aprintf(l,x) { check_commit_cs.Enter(); FILE* fp = fopen("andrew.txt","a"); fprintf x; fprintf(fp, "\n"); fclose(fp); check_commit_cs.Leave(); }
+
 #ifdef __GNUC__
 #define inline __attribute__((always_inline)) inline
 #else
