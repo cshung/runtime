@@ -18,6 +18,8 @@
 
 #include "gcpriv.h"
 
+bool deadbead_diagnostics = false;
+
 #if defined(TARGET_AMD64) && defined(TARGET_WINDOWS)
 #define USE_VXSORT
 #else
@@ -45274,6 +45276,11 @@ HRESULT GCHeap::Initialize()
 
 #ifdef USE_REGIONS
     gc_heap::regions_range = (size_t)GCConfig::GetGCRegionRange();
+    if (gc_heap::regions_range == 0xdeadbead)
+    {
+        deadbead_diagnostics = true;
+        gc_heap::regions_range = 0;
+    }
     if (gc_heap::regions_range == 0)
     {
         if (gc_heap::heap_hard_limit)
