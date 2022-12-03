@@ -138,7 +138,7 @@ inline void FATAL_GC_ERROR()
 #define MAX_LONGPATH 1024
 #endif // MAX_LONGPATH
 
-//#define TRACE_GC
+#define TRACE_GC
 //#define SIMPLE_DPRINTF
 
 //#define JOIN_STATS         //amount of time spent in the join
@@ -1217,6 +1217,7 @@ enum bookkeeping_element
     seg_mapping_table_element,
 #ifdef BACKGROUND_GC
     mark_array_element,
+    mark_array_shadow_element,
 #endif
     total_bookkeeping_elements
 };
@@ -2210,7 +2211,7 @@ protected:
     PER_HEAP
     BOOL mark_array_bit_set (size_t mark_bit);
     PER_HEAP
-    void mark_array_clear_marked (uint8_t* add);
+    void mark_array_clear_marked (uint8_t* add, int reason);
 
 #ifdef FEATURE_BASICFREEZE
     PER_HEAP
@@ -3840,6 +3841,9 @@ public:
 #ifdef BACKGROUND_GC
     PER_HEAP
     uint32_t* mark_array;
+
+    PER_HEAP
+    uint32_t* mark_array_shadow;
 #endif //BACKGROUND_GC
 
 #ifdef CARD_BUNDLE

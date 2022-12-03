@@ -18,6 +18,8 @@
 
 #include "gcpriv.h"
 
+void andrew_debug(){}
+
 #if defined(TARGET_AMD64) && defined(TARGET_WINDOWS)
 #define USE_VXSORT
 #else
@@ -2168,6 +2170,7 @@ void* virtual_alloc (size_t size, bool use_large_pages_p, uint16_t numa_node = N
 /* per heap static initialization */
 #if defined(BACKGROUND_GC) && !defined(MULTIPLE_HEAPS)
 uint32_t*   gc_heap::mark_array;
+uint32_t*   gc_heap::mark_array_shadow;
 #endif //BACKGROUND_GC && !MULTIPLE_HEAPS
 
 uint8_t**   gc_heap::g_mark_list;
@@ -8371,6 +8374,7 @@ public:
     // want to be able to make one commit call for everything before it.
 #ifdef BACKGROUND_GC
     uint32_t*   mark_array;
+    uint32_t*   mark_array_shadow;
 #endif //BACKGROUND_GC
 
     size_t      size;
@@ -8420,6 +8424,12 @@ inline
 uint32_t*& card_table_mark_array (uint32_t* c_table)
 {
     return ((card_table_info*)((uint8_t*)c_table - sizeof (card_table_info)))->mark_array;
+}
+
+inline
+uint32_t*& card_table_mark_array_shadow (uint32_t* c_table)
+{
+    return ((card_table_info*)((uint8_t*)c_table - sizeof (card_table_info)))->mark_array_shadow;
 }
 
 #ifdef HOST_64BIT
@@ -8514,20 +8524,29 @@ BOOL gc_heap::is_mark_bit_set (uint8_t* add)
 
 inline
 void gc_heap::mark_array_set_marked (uint8_t* add)
-{
+{    
     size_t index = mark_word_of (add);
     uint32_t val = (1 << mark_bit_bit_of (add));
 #ifdef MULTIPLE_HEAPS
     Interlocked::Or (&(mark_array [index]), val);
 #else
     mark_array [index] |= val;
+    mark_array_shadow [index] |= val;    
 #endif
+    dprintf (10086, ("Background marked: %p %p %x %x %x", add, index, val, mark_array[index], mark_array_shadow[index]));
 }
 
 inline
-void gc_heap::mark_array_clear_marked (uint8_t* add)
+void gc_heap::mark_array_clear_marked (uint8_t* add, int reason)
 {
-    mark_array [mark_word_of (add)] &= ~(1 << mark_bit_bit_of (add));
+    size_t mi = mark_word_of (add);
+    size_t mb = mark_bit_bit_of (add);
+    uint32_t bit = 1 << mark_bit_bit_of (add);
+    uint32_t mask = ~bit;
+
+    mark_array [mi] &= mask;
+    mark_array_shadow [mi] &= mask;
+    dprintf (10086, ("Background cleared because %d: %p %p %x %x %x", reason, add, mi, bit, mark_array[mi], mark_array_shadow[mi]));
 }
 
 size_t size_mark_array_of (uint8_t* from, uint8_t* end)
@@ -8576,10 +8595,11 @@ void gc_heap::clear_mark_array (uint8_t* from, uint8_t* end, BOOL read_only/*=FA
         uint8_t* op = from;
         while (op < mark_word_address (beg_word))
         {
-            mark_array_clear_marked (op);
+            mark_array_clear_marked (op, 1);
             op += mark_bit_pitch;
         }
 
+        FATAL_GC_ERROR();
         memset (&mark_array[beg_word], 0, (end_word - beg_word)*sizeof (uint32_t));
 
 #ifdef _DEBUG
@@ -8711,6 +8731,7 @@ void gc_heap::get_card_table_element_sizes (uint8_t* start, uint8_t* end, size_t
     if (gc_can_use_concurrent)
     {
         sizes[mark_array_element] = size_mark_array_of (start, end);
+        sizes[mark_array_shadow_element] = size_mark_array_of (start, end);
     }
 #endif //BACKGROUND_GC
 }
@@ -8739,6 +8760,7 @@ void gc_heap::get_card_table_element_layout (uint8_t* start, uint8_t* end, size_
         // pages for mark array never overlaps with pages in the seg mapping table. That way commit_mark_array_by_range
         // will never commit a page that is already committed here for the seg mapping table.
         OS_PAGE_SIZE,      // mark_array_element
+        OS_PAGE_SIZE,      // mark_array_shadow_element
 #endif //BACKGROUND_GC
         // commit_mark_array_by_range extends the end pointer of the commit to the next page boundary, we better make sure it
         // is reserved
@@ -9047,9 +9069,14 @@ uint32_t* gc_heap::make_card_table (uint8_t* start, uint8_t* end)
 
 #ifdef BACKGROUND_GC
     if (gc_can_use_concurrent)
+    {
         card_table_mark_array (ct) = (uint32_t*)(mem + card_table_element_layout[mark_array_element]);
+        card_table_mark_array_shadow (ct) = (uint32_t*)(mem + card_table_element_layout[mark_array_shadow_element]);
+    }
     else
+    {
         card_table_mark_array (ct) = NULL;
+    }
 #endif //BACKGROUND_GC
 
     return translate_card_table(ct);
@@ -9417,6 +9444,7 @@ void gc_heap::copy_brick_card_range (uint8_t* la, uint32_t* old_card_table,
                 // segments are always on page boundaries
                 uint8_t* m_start = max (background_saved_lowest_address, start);
                 uint8_t* m_end = min (background_saved_highest_address, end);
+                FATAL_GC_ERROR();
                 memcpy (&mark_array[mark_word_of (m_start)],
                         &old_mark_array[mark_word_of (m_start) - mark_word_of (la)],
                         size_mark_array_of (m_start, m_end));
@@ -9490,6 +9518,7 @@ void gc_heap::copy_brick_card_table()
 #ifdef BACKGROUND_GC
     if (gc_can_use_concurrent)
     {
+        FATAL_GC_ERROR();
         mark_array = translate_mark_array (card_table_mark_array (ct));
         assert (mark_word_of (g_gc_highest_address) ==
             mark_word_of (align_on_mark_word (g_gc_highest_address)));
@@ -11128,6 +11157,7 @@ void gc_heap::seg_set_mark_array_bits_soh (heap_segment* seg)
             op += mark_bit_pitch;
         }
 
+        FATAL_GC_ERROR();
         memset (&mark_array[beg_word], 0xFF, (end_word - beg_word)*sizeof (uint32_t));
     }
 }
@@ -11155,12 +11185,15 @@ void gc_heap::bgc_clear_batch_mark_array_bits (uint8_t* start, uint8_t* end)
         unsigned int firstwrd = lowbits (~0, startbit);
         unsigned int lastwrd = highbits (~0, endbit);
 
+        dprintf (10086, ("Batch clearing happened"));
+
         if (startwrd == endwrd)
         {
             if (startbit != endbit)
             {
                 unsigned int wrd = firstwrd | lastwrd;
                 mark_array[startwrd] &= wrd;
+                mark_array_shadow[startwrd] &= wrd;
             }
             else
             {
@@ -11173,18 +11206,21 @@ void gc_heap::bgc_clear_batch_mark_array_bits (uint8_t* start, uint8_t* end)
         if (startbit)
         {
             mark_array[startwrd] &= firstwrd;
+            mark_array_shadow[startwrd] &= firstwrd;
             startwrd++;
         }
 
         for (size_t wrdtmp = startwrd; wrdtmp < endwrd; wrdtmp++)
         {
             mark_array[wrdtmp] = 0;
+            mark_array_shadow[wrdtmp] = 0;
         }
 
         // clear the last mark word.
         if (endbit)
         {
             mark_array[endwrd] &= lastwrd;
+            mark_array_shadow[endwrd] &= lastwrd;
         }
     }
 }
@@ -14442,9 +14478,14 @@ gc_heap::init_gc_heap (int h_number)
 
 #ifdef BACKGROUND_GC
     if (gc_can_use_concurrent)
+    {
         mark_array = translate_mark_array (card_table_mark_array (&g_gc_card_table[card_word (card_of (g_gc_lowest_address))]));
+        mark_array_shadow = translate_mark_array (card_table_mark_array_shadow (&g_gc_card_table[card_word (card_of (g_gc_lowest_address))]));
+    }
     else
+    {
         mark_array = NULL;
+    }
 #endif //BACKGROUND_GC
 
 #ifdef USE_REGIONS
@@ -15153,6 +15194,7 @@ void gc_heap::set_batch_mark_array_bits (uint8_t* start, uint8_t* end)
     unsigned int firstwrd = ~(lowbits (~0, startbit));
     unsigned int lastwrd = ~(highbits (~0, endbit));
 
+    FATAL_GC_ERROR();
     if (startwrd == endwrd)
     {
         unsigned int wrd = firstwrd & lastwrd;
@@ -15196,6 +15238,7 @@ void gc_heap::check_batch_mark_array_bits (uint8_t* start, uint8_t* end)
     unsigned int firstwrd = ~(lowbits (~0, startbit));
     unsigned int lastwrd = ~(highbits (~0, endbit));
 
+    FATAL_GC_ERROR();
     if (startwrd == endwrd)
     {
         unsigned int wrd = firstwrd & lastwrd;
@@ -20416,6 +20459,7 @@ int gc_heap::generation_to_condemn (int n_initial,
                                     BOOL* elevation_requested_p,
                                     BOOL check_only_p)
 {
+    n_initial = 2;
     gc_mechanisms temp_settings = settings;
     gen_to_condemn_tuning temp_condemn_reasons;
     gc_mechanisms* local_settings = (check_only_p ? &temp_settings : &settings);
@@ -34662,6 +34706,7 @@ BOOL gc_heap::commit_mark_array_new_seg (gc_heap* hp,
 
         if (hp->card_table != new_card_table)
         {
+            FATAL_GC_ERROR();
             if (new_lowest_address == 0)
             {
                 new_lowest_address = g_gc_lowest_address;
@@ -34688,6 +34733,17 @@ BOOL gc_heap::commit_mark_array_new_seg (gc_heap* hp,
 
 BOOL gc_heap::commit_mark_array_by_range (uint8_t* begin, uint8_t* end, uint32_t* mark_array_addr)
 {
+#ifndef MULTIPLE_HEAPS
+    if (mark_array_addr == mark_array)
+    {
+        BOOL oh = commit_mark_array_by_range(begin, end, mark_array_shadow);
+        if (!oh)
+        {
+            // Whatever, something is wrong anyway
+            FATAL_GC_ERROR();
+        }
+    }
+#endif //MULTIPLE_HEAPS
     size_t beg_word = mark_word_of (begin);
     size_t end_word = mark_word_of (align_on_mark_word (end));
     uint8_t* commit_start = align_lower_page ((uint8_t*)&mark_array_addr[beg_word]);
@@ -41999,7 +42055,7 @@ CObjectHeader* gc_heap::allocate_uoh_object (size_t jsize, uint32_t flags, int g
             dprintf (3, ("Clearing mark bit at address %zx",
                      (size_t)(&mark_array [mark_word_of (result)])));
 
-            mark_array_clear_marked (result);
+            mark_array_clear_marked (result, 2);
         }
         if (current_c_gc_state != c_gc_state_free)
         {
@@ -42160,7 +42216,7 @@ BOOL gc_heap::background_object_marked (uint8_t* o, BOOL clearp)
         {
             if (clearp)
             {
-                mark_array_clear_marked (o);
+                mark_array_clear_marked (o, 3);
                 //dprintf (3, ("mark array bit for object %zx is cleared", o));
                 dprintf (3, ("CM: %p", o));
             }
@@ -42866,7 +42922,7 @@ void gc_heap::background_sweep()
 #ifdef DOUBLY_LINKED_FL
                // We no longer go backwards in segment list for SOH so we need to bail when we see
                // segments newly allocated during bgc sweep.
-               && !((heap_segment_background_allocated (seg) == 0) && (gen != large_object_generation))
+               && !((heap_segment_background_allocated (seg) == 0) && (gen < large_object_generation))
 #endif //DOUBLY_LINKED_FL
                 )
         {
@@ -42899,13 +42955,17 @@ void gc_heap::background_sweep()
                             (size_t)heap_segment_allocated (seg),
                             (size_t)heap_segment_background_allocated (seg)));
 
+            // Game on, starting to sweep
+            dprintf(10086, ("Sweeping segment [%p, %p)", o, end));
             while (o < end)
             {
                 if (background_object_marked (o, TRUE))
                 {
+                    // Found a plug start - did the mark bit reset
                     uint8_t* plug_start = o;
                     if (i > max_generation)
                     {
+                        dprintf (10086, ("Background freeing %p, mw=%d, mws=%d", plug_end, mark_array[mark_word_of(plug_end)], mark_array_shadow[mark_word_of(plug_end)]));
                         dprintf (2, ("uoh fr: [%p-%p[(%zd)", plug_end, plug_start, plug_start-plug_end));
                     }
 
@@ -42931,8 +42991,10 @@ void gc_heap::background_sweep()
                         fix_brick_to_highest (plug_start, plug_start);
                     }
 
+                    // Keep walking, reset the mark bit along the way, until we found the first free object
                     do
                     {
+                        dprintf (10086, ("Background sweeping %p", o));
                         next_sweep_obj = o + Align (size (o), align_const);
                         current_num_objs++;
                         if (current_num_objs >= num_objs)
@@ -42953,13 +43015,14 @@ void gc_heap::background_sweep()
                     dprintf (3, ("bgs: plug [%zx, %zx[", (size_t)plug_start, (size_t)plug_end));
                 }
 
+                // Now we are beginning the gap, and we are NOT resetting bits
                 while ((o < end) && !background_object_marked (o, FALSE))
                 {
                     size_t size_o = Align(size (o), align_const);
                     next_sweep_obj = o + size_o;
 
 #ifdef DOUBLY_LINKED_FL
-                    if (gen != large_object_generation)
+                    if (gen < large_object_generation)
                     {
                         if (method_table (o) == g_gc_pFreeObjectMethodTable)
                         {
@@ -44156,6 +44219,7 @@ void gc_heap::clear_all_mark_array()
                     size = size_total;
                 }
 
+                FATAL_GC_ERROR();
                 memclr ((uint8_t*)&mark_array[markw], size);
 
                 if (size_left != 0)

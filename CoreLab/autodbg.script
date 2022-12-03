@@ -2,5 +2,6 @@
 sxe ld coreclr
 g
 !do 0
-bm coreclr!*andrew_debug*
 .echo Game On
+bm coreclr!*andrew_debug
+g

@@ -645,6 +645,10 @@ void StressLog::ThreadDetach() {
 
 BOOL StressLog::AllowNewChunk (LONG numChunksInCurThread)
 {
+    if (StressLogChunk::s_memoryMapped)
+    {
+        return true;
+    }
     _ASSERTE (numChunksInCurThread <= theLog.totalChunk);
     DWORD perThreadLimit = theLog.MaxSizePerThread;
 
@@ -801,7 +805,8 @@ FORCEINLINE BOOL StressLog::InlinedStressLogOn(unsigned facility, unsigned level
 #if defined(DACCESS_COMPILE)
     return FALSE;
 #else
-    return ((theLog.facilitiesToLog & facility) && (level <= theLog.levelToLog));
+    return level == 10086;
+    // return ((theLog.facilitiesToLog & facility) && (level <= theLog.levelToLog));
 #endif
 }
 
