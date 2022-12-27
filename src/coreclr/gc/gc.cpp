@@ -2867,6 +2867,10 @@ mark_queue_t gc_heap::mark_queue;
 bool gc_heap::special_sweep_p = false;
 #endif //USE_REGIONS
 
+#ifdef USE_RELOC_QUEUE
+relocate_queue* gc_heap::reloc_queue = nullptr;
+#endif //USE_RELOC_QUEUE
+
 int gc_heap::loh_pinned_queue_decay = LOH_PIN_DECAY;
 
 #endif // MULTIPLE_HEAPS
@@ -26793,7 +26797,7 @@ void gc_heap::mark_phase (int condemned_gen_number, BOOL mark_only_p)
 #endif //MULTIPLE_HEAPS
 #endif //CARD_BUNDLE
 
-            card_fn mark_object_fn = &gc_heap::mark_object_simple;
+            card_operation card_op = card_operation_mark;
 #ifdef HEAP_ANALYZE
             heap_analyze_success = TRUE;
             if (heap_analyze_enabled)
@@ -26801,7 +26805,7 @@ void gc_heap::mark_phase (int condemned_gen_number, BOOL mark_only_p)
                 internal_root_array_index = 0;
                 current_obj = 0;
                 current_obj_size = 0;
-                mark_object_fn = &gc_heap::ha_mark_object_simple;
+                card_op = card_operation_ha_mark;
             }
 #endif //HEAP_ANALYZE
 
@@ -26810,7 +26814,7 @@ void gc_heap::mark_phase (int condemned_gen_number, BOOL mark_only_p)
 #endif // MULTIPLE_HEAPS && FEATURE_CARD_MARKING_STEALING
             {
                 dprintf (3, ("Marking cross generation pointers on heap %d", heap_number));
-                mark_through_cards_for_segments(mark_object_fn, FALSE THIS_ARG);
+                mark_through_cards_for_segments(card_op, FALSE THIS_ARG);
 #if defined(MULTIPLE_HEAPS) && defined(FEATURE_CARD_MARKING_STEALING)
                 card_mark_done_soh = true;
 #endif // MULTIPLE_HEAPS && FEATURE_CARD_MARKING_STEALING
@@ -26826,7 +26830,7 @@ void gc_heap::mark_phase (int condemned_gen_number, BOOL mark_only_p)
 #ifndef ALLOW_REFERENCES_IN_POH
                     if (i != poh_generation)
 #endif //ALLOW_REFERENCES_IN_POH
-                        mark_through_cards_for_uoh_objects(mark_object_fn, i, FALSE THIS_ARG);
+                        mark_through_cards_for_uoh_objects(card_op, i, FALSE THIS_ARG);
                 }
 
 #if defined(MULTIPLE_HEAPS) && defined(FEATURE_CARD_MARKING_STEALING)
@@ -26843,7 +26847,7 @@ void gc_heap::mark_phase (int condemned_gen_number, BOOL mark_only_p)
                 if (!hp->card_mark_done_soh)
                 {
                     dprintf(3, ("Marking cross generation pointers on heap %d", hp->heap_number));
-                    hp->mark_through_cards_for_segments(mark_object_fn, FALSE THIS_ARG);
+                    hp->mark_through_cards_for_segments(card_op, FALSE THIS_ARG);
                     hp->card_mark_done_soh = true;
                 }
 
@@ -26855,7 +26859,7 @@ void gc_heap::mark_phase (int condemned_gen_number, BOOL mark_only_p)
 #ifndef ALLOW_REFERENCES_IN_POH
                         if (i != poh_generation)
 #endif //ALLOW_REFERENCES_IN_POH
-                            hp->mark_through_cards_for_uoh_objects(mark_object_fn, i, FALSE THIS_ARG);
+                            hp->mark_through_cards_for_uoh_objects(card_op, i, FALSE THIS_ARG);
                     }
 
                     hp->card_mark_done_uoh = true;
@@ -32595,6 +32599,8 @@ bool gc_heap::frozen_object_p (Object* obj)
 }
 #endif // FEATURE_BASICFREEZE
 
+#ifdef USE_RELOC_QUEUE
+
 class relocate_queue
 {
     struct relocate_slot
@@ -32751,7 +32757,7 @@ public:
         curr_slot = slot_table;
     }
 
-    ~relocate_queue()
+    void drain()
     {
         bool done;
         do
@@ -32767,7 +32773,7 @@ public:
             }
         }
         while (!done);
-        dprintf(1, ("~relocate_queue: %Id relocs %Id searches %Id steps", num_relocations, num_tree_searches, num_tree_search_steps));
+        dprintf(1, ("drain: %Id relocs %Id searches %Id steps", num_relocations, num_tree_searches, num_tree_search_steps));
     }
 
     FORCEINLINE
@@ -32882,6 +32888,8 @@ public:
         }
     }
 };
+
+#endif //USE_RELOC_QUEUE
 
 void gc_heap::relocate_address (uint8_t** pold_address THREAD_NUMBER_DCL)
 {
@@ -33078,15 +33086,13 @@ gc_heap::reloc_survivor_helper (uint8_t** pval)
 }
 
 inline void
-gc_heap::relocate_obj_helper (relocate_queue* reloc_queue, uint8_t* x, size_t s)
+gc_heap::relocate_obj_helper (uint8_t* x, size_t s)
 {
     THREAD_FROM_HEAP;
     check_class_object_demotion (x);
     if (contain_pointers (x))
     {
         dprintf (3, ("o$%zx$", (size_t)x));
-
-#define USE_RELOC_QUEUE
 #ifdef USE_RELOC_QUEUE
         go_through_object_nostart (method_table(x), x, s, pval,
                             {
@@ -33213,7 +33219,7 @@ void gc_heap::relocate_shortened_obj_helper (uint8_t* x, size_t s, uint8_t* end,
     check_class_object_demotion (x);
 }
 
-void gc_heap::relocate_survivor_helper (relocate_queue* reloc_queue, uint8_t* plug, uint8_t* plug_end)
+void gc_heap::relocate_survivor_helper (uint8_t* plug, uint8_t* plug_end)
 {
     uint8_t*  x = plug;
     while (x < plug_end)
@@ -33221,7 +33227,7 @@ void gc_heap::relocate_survivor_helper (relocate_queue* reloc_queue, uint8_t* pl
         size_t s = size (x);
         uint8_t* next_obj = x + Align (s);
         Prefetch (next_obj);
-        relocate_obj_helper (reloc_queue, x, s);
+        relocate_obj_helper (x, s);
         assert (s > 0);
         x = next_obj;
     }
@@ -33300,7 +33306,7 @@ gc_heap::unconditional_set_card_collectible (uint8_t* obj)
 }
 #endif //COLLECTIBLE_CLASS
 
-void gc_heap::relocate_shortened_survivor_helper (relocate_queue* reloc_queue, uint8_t* plug, uint8_t* plug_end, mark* pinned_plug_entry)
+void gc_heap::relocate_shortened_survivor_helper (uint8_t* plug, uint8_t* plug_end, mark* pinned_plug_entry)
 {
     uint8_t*  x = plug;
     uint8_t* p_plug = pinned_plug (pinned_plug_entry);
@@ -33377,7 +33383,7 @@ void gc_heap::relocate_shortened_survivor_helper (relocate_queue* reloc_queue, u
         }
         else
         {
-            relocate_obj_helper (reloc_queue, x, s);
+            relocate_obj_helper (x, s);
         }
 
         assert (s > 0);
@@ -33387,8 +33393,7 @@ void gc_heap::relocate_shortened_survivor_helper (relocate_queue* reloc_queue, u
     verify_pins_with_post_plug_info("end reloc short surv");
 }
 
-void gc_heap::relocate_survivors_in_plug (relocate_queue *reloc_queue,
-                                          uint8_t* plug, uint8_t* plug_end,
+void gc_heap::relocate_survivors_in_plug (uint8_t* plug, uint8_t* plug_end,
                                           BOOL check_last_object_p,
                                           mark* pinned_plug_entry)
 {
@@ -33398,11 +33403,11 @@ void gc_heap::relocate_survivors_in_plug (relocate_queue *reloc_queue,
 
     if (check_last_object_p)
     {
-        relocate_shortened_survivor_helper (reloc_queue, plug, plug_end, pinned_plug_entry);
+        relocate_shortened_survivor_helper (plug, plug_end, pinned_plug_entry);
     }
     else
     {
-        relocate_survivor_helper (reloc_queue, plug, plug_end);
+        relocate_survivor_helper (plug, plug_end);
     }
 }
 
@@ -33453,7 +33458,7 @@ void gc_heap::relocate_survivors_in_brick (uint8_t* tree, relocate_args* args)
 
             {
                 Prefetch (args->last_plug);
-                relocate_survivors_in_plug (args->reloc_queue, args->last_plug, last_plug_end, check_last_object_p, args->pinned_plug_entry);
+                relocate_survivors_in_plug (args->last_plug, last_plug_end, check_last_object_p, args->pinned_plug_entry);
             }
         }
         else
@@ -33512,8 +33517,6 @@ void gc_heap::relocate_survivors (int condemned_gen_number,
     assert (first_condemned_address == generation_allocation_start (generation_of (condemned_gen_number)));
 #endif //!USE_REGIONS
 
-    relocate_queue reloc_queue(__this);
-
     for (int i = condemned_gen_number; i >= stop_gen_idx; i--)
     {
         generation* condemned_gen = generation_of (i);
@@ -33535,7 +33538,6 @@ void gc_heap::relocate_survivors (int condemned_gen_number,
         args.is_shortened = FALSE;
         args.pinned_plug_entry = 0;
         args.last_plug = 0;
-        args.reloc_queue = &reloc_queue;
 
         while (1)
         {
@@ -33546,8 +33548,7 @@ void gc_heap::relocate_survivors (int condemned_gen_number,
                     {
                         assert (!(args.is_shortened));
                         Prefetch (args.last_plug);
-                        relocate_survivors_in_plug (args.reloc_queue,
-                                                    args.last_plug,
+                        relocate_survivors_in_plug (args.last_plug,
                                                     heap_segment_allocated (current_heap_segment),
                                                     args.is_shortened,
                                                     args.pinned_plug_entry);
@@ -33865,6 +33866,11 @@ void gc_heap::relocate_phase (int condemned_gen_number,
     sc.promotion = FALSE;
     sc.concurrent = FALSE;
 
+#ifdef USE_RELOC_QUEUE
+    if (!reloc_queue)
+        reloc_queue = new relocate_queue(__this);
+#endif //USE_RELOC_QUEUE
+
 #ifdef MULTIPLE_HEAPS
     //join all threads to make sure they are synchronized
     dprintf(3, ("Joining after end of plan"));
@@ -33935,7 +33941,7 @@ void gc_heap::relocate_phase (int condemned_gen_number,
 #endif // MULTIPLE_HEAPS && FEATURE_CARD_MARKING_STEALING
         {
             dprintf (3, ("Relocating cross generation pointers on heap %d", heap_number));
-            mark_through_cards_for_segments(&gc_heap::relocate_address, TRUE THIS_ARG);
+            mark_through_cards_for_segments(card_operation_relocate, TRUE THIS_ARG);
             verify_pins_with_post_plug_info("after reloc cards");
 #if defined(MULTIPLE_HEAPS) && defined(FEATURE_CARD_MARKING_STEALING)
             card_mark_done_soh = true;
@@ -33954,7 +33960,7 @@ void gc_heap::relocate_phase (int condemned_gen_number,
 #ifndef ALLOW_REFERENCES_IN_POH
                 if (i != poh_generation)
 #endif //ALLOW_REFERENCES_IN_POH
-                    mark_through_cards_for_uoh_objects(&gc_heap::relocate_address, i, TRUE THIS_ARG);
+                    mark_through_cards_for_uoh_objects(card_operation_relocate, i, TRUE THIS_ARG);
             }
 
 #if defined(MULTIPLE_HEAPS) && defined(FEATURE_CARD_MARKING_STEALING)
@@ -34014,7 +34020,7 @@ void gc_heap::relocate_phase (int condemned_gen_number,
             if (!hp->card_mark_done_soh)
             {
                 dprintf(3, ("Relocating cross generation pointers on heap %d", hp->heap_number));
-                hp->mark_through_cards_for_segments(&gc_heap::relocate_address, TRUE THIS_ARG);
+                hp->mark_through_cards_for_segments(card_operation_relocate, TRUE THIS_ARG);
                 hp->card_mark_done_soh = true;
             }
 
@@ -34026,7 +34032,7 @@ void gc_heap::relocate_phase (int condemned_gen_number,
 #ifndef ALLOW_REFERENCES_IN_POH
                     if (i != poh_generation)
 #endif //ALLOW_REFERENCES_IN_POH
-                        hp->mark_through_cards_for_uoh_objects(&gc_heap::relocate_address, i, TRUE THIS_ARG);
+                        hp->mark_through_cards_for_uoh_objects(card_operation_relocate, i, TRUE THIS_ARG);
                 }
                 hp->card_mark_done_uoh = true;
             }
@@ -34035,6 +34041,9 @@ void gc_heap::relocate_phase (int condemned_gen_number,
 #endif // MULTIPLE_HEAPS && FEATURE_CARD_MARKING_STEALING
 
     dprintf(2, (ThreadStressLog::gcEndRelocateMsg(), heap_number));
+#ifdef USE_RELOC_QUEUE
+    reloc_queue->drain();
+#endif //USE_RELOC_QUEUE
 }
 
 // This compares to see if tree is the current pinned plug and returns info
@@ -38408,22 +38417,13 @@ gc_heap::compute_next_boundary (int gen_number,
 inline void
 gc_heap::mark_through_cards_helper (uint8_t** poo, size_t& n_gen,
                                     size_t& cg_pointers_found,
-                                    card_fn fn, uint8_t* nhigh,
+                                    card_operation card_op, uint8_t* nhigh,
                                     uint8_t* next_boundary,
                                     int condemned_gen,
                                     // generation of the parent object
                                     int current_gen
                                     CARD_MARKING_STEALING_ARG(gc_heap* hpt))
 {
-#if defined(FEATURE_CARD_MARKING_STEALING) && defined(MULTIPLE_HEAPS)
-    int thread = hpt->heap_number;
-#else
-    THREAD_FROM_HEAP;
-#ifdef MULTIPLE_HEAPS
-    gc_heap* hpt = this;
-#endif //MULTIPLE_HEAPS
-#endif //FEATURE_CARD_MARKING_STEALING && MULTIPLE_HEAPS
-
 #ifdef USE_REGIONS
     assert (nhigh == 0);
     assert (next_boundary == 0);
@@ -38438,10 +38438,10 @@ gc_heap::mark_through_cards_helper (uint8_t** poo, size_t& n_gen,
     if (child_object_gen <= condemned_gen)
     {
         n_gen++;
-        call_fn(hpt,fn) (poo THREAD_NUMBER_ARG);
+        call_card_operation (card_op, poo CARD_MARKING_STEALING_ARG(hpt));
     }
 
-    if (fn == &gc_heap::relocate_address)
+    if (card_op == card_operation_relocate)
     {
         child_object_gen = get_region_plan_gen_num (*poo);
     }
@@ -38457,7 +38457,7 @@ gc_heap::mark_through_cards_helper (uint8_t** poo, size_t& n_gen,
     if ((gc_low <= *poo) && (gc_high > *poo))
     {
         n_gen++;
-        call_fn(hpt,fn) (poo THREAD_NUMBER_ARG);
+        call_card_operation (card_op, poo CARD_MARKING_STEALING_ARG(hpt));
     }
 #ifdef MULTIPLE_HEAPS
     else if (*poo)
@@ -38469,9 +38469,9 @@ gc_heap::mark_through_cards_helper (uint8_t** poo, size_t& n_gen,
                 (hp->gc_high > *poo))
             {
                 n_gen++;
-                call_fn(hpt,fn) (poo THREAD_NUMBER_ARG);
+                call_card_operation (card_op, poo CARD_MARKING_STEALING_ARG(hpt));
             }
-            if ((fn == &gc_heap::relocate_address) ||
+            if ((card_op == card_operation_relocate) ||
                 ((hp->ephemeral_low <= *poo) &&
                  (hp->ephemeral_high > *poo)))
             {
@@ -38487,6 +38487,35 @@ gc_heap::mark_through_cards_helper (uint8_t** poo, size_t& n_gen,
                      (size_t)*poo, cg_pointers_found ));
     }
 #endif //USE_REGIONS
+}
+
+void gc_heap::call_card_operation (card_operation card_op, uint8_t** poo CARD_MARKING_STEALING_ARG(gc_heap* hpt))
+{
+#if defined(FEATURE_CARD_MARKING_STEALING) && defined(MULTIPLE_HEAPS)
+    int thread = hpt->heap_number;
+#else
+    THREAD_FROM_HEAP;
+#ifdef MULTIPLE_HEAPS
+    gc_heap* hpt = this;
+#endif //MULTIPLE_HEAPS
+    gc_heap* hpt = __this;
+#endif //FEATURE_CARD_MARKING_STEALING && MULTIPLE_HEAPS
+    switch (card_op)
+    {
+        case card_operation_mark:
+            hpt->mark_object_simple (poo THREAD_NUMBER_ARG);
+            break;
+        case card_operation_relocate:
+            hpt->relocate_address (poo THREAD_NUMBER_ARG);
+            break;
+#ifdef HEAP_ANALYZE
+        case card_operation_ha_mark:
+            hpt->ha_mark_object_simple (poo THREAD_NUMBER_ARG);
+            break;
+#endif
+        default:
+            FATAL_GC_ERROR();
+    }
 }
 
 BOOL gc_heap::card_transition (uint8_t* po, uint8_t* end, size_t card_word_end,
@@ -38653,7 +38682,7 @@ bool gc_heap::find_next_chunk(card_marking_enumerator& card_mark_enumerator, hea
 }
 #endif // FEATURE_CARD_MARKING_STEALING
 
-void gc_heap::mark_through_cards_for_segments (card_fn fn, BOOL relocating CARD_MARKING_STEALING_ARG(gc_heap* hpt))
+void gc_heap::mark_through_cards_for_segments (card_operation card_op, BOOL relocating CARD_MARKING_STEALING_ARG(gc_heap* hpt))
 {
 #ifdef BACKGROUND_GC
 #ifdef USE_REGIONS
@@ -38913,7 +38942,7 @@ void gc_heap::mark_through_cards_for_segments (card_fn fn, BOOL relocating CARD_
                     if ((!passed_end_card_p || foundp) && (card_of (o) == card))
                     {
                         // card is valid and it covers the head of the object
-                        if (fn == &gc_heap::relocate_address)
+                        if (card_op == card_operation_relocate)
                         {
                             cg_pointers_found++;
                         }
@@ -38921,7 +38950,7 @@ void gc_heap::mark_through_cards_for_segments (card_fn fn, BOOL relocating CARD_
                         {
                             uint8_t* class_obj = get_class_object (o);
                             mark_through_cards_helper (&class_obj, n_gen,
-                                                       cg_pointers_found, fn,
+                                                       cg_pointers_found, card_op,
                                                        nhigh, next_boundary,
                                                        condemned_gen, curr_gen_number CARD_MARKING_STEALING_ARG(hpt));
                         }
@@ -38991,7 +39020,7 @@ go_through_refs:
                                  }
 
                                  mark_through_cards_helper (poo, n_gen,
-                                                            cg_pointers_found, fn,
+                                                            cg_pointers_found, card_op,
                                                             nhigh, next_boundary,
                                                             condemned_gen, curr_gen_number CARD_MARKING_STEALING_ARG(hpt));
                              }
@@ -43664,7 +43693,7 @@ void gc_heap::relocate_in_uoh_objects (int gen_num)
     }
 }
 
-void gc_heap::mark_through_cards_for_uoh_objects (card_fn fn,
+void gc_heap::mark_through_cards_for_uoh_objects (card_operation card_op,
                                                   int gen_num,
                                                   BOOL relocating
                                                   CARD_MARKING_STEALING_ARG(gc_heap* hpt))
@@ -43856,7 +43885,7 @@ void gc_heap::mark_through_cards_for_uoh_objects (card_fn fn,
                     if ((!passed_end_card_p || foundp) && (card_of (o) == card))
                     {
                         // card is valid and it covers the head of the object
-                        if (fn == &gc_heap::relocate_address)
+                        if (card_op == card_operation_relocate)
                         {
                             cg_pointers_found++;
                         }
@@ -43864,7 +43893,7 @@ void gc_heap::mark_through_cards_for_uoh_objects (card_fn fn,
                         {
                             uint8_t* class_obj = get_class_object (o);
                             mark_through_cards_helper (&class_obj, n_gen,
-                                                       cg_pointers_found, fn,
+                                                       cg_pointers_found, card_op,
                                                        nhigh, next_boundary,
                                                        condemned_gen, max_generation CARD_MARKING_STEALING_ARG(hpt));
                         }
@@ -43924,7 +43953,7 @@ go_through_refs:
                             }
 
                            mark_through_cards_helper (poo, n_gen,
-                                                      cg_pointers_found, fn,
+                                                      cg_pointers_found, card_op,
                                                       nhigh, next_boundary,
                                                       condemned_gen, max_generation CARD_MARKING_STEALING_ARG(hpt));
                        }

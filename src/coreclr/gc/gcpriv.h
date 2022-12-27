@@ -63,6 +63,7 @@ inline void FATAL_GC_ERROR()
 // We can add more mechanisms here.
 //#define STRESS_REGIONS
 #define MARK_PHASE_PREFETCH
+#define USE_RELOC_QUEUE
 #endif //USE_REGIONS
 
 // FEATURE_STRUCTALIGN was added by Midori. In CLR we are not interested
@@ -1240,6 +1241,19 @@ public:
     void verify_empty();
 };
 
+#ifdef USE_RELOC_QUEUE
+class relocate_queue;
+#endif //USE_RELOC_QUEUE
+
+enum card_operation
+{
+    card_operation_mark,
+    card_operation_relocate,
+#ifdef HEAP_ANALYZE
+    card_operation_ha_mark,
+#endif
+};
+
 //class definition of the internal class
 class gc_heap
 {
@@ -1268,15 +1282,13 @@ class gc_heap
 
     friend class mark_queue_t;
 
+#ifdef USE_RELOC_QUEUE
     friend class relocate_queue;
+#endif //USE_RELOC_QUEUE
 
 #ifdef MULTIPLE_HEAPS
-    typedef void (gc_heap::* card_fn) (uint8_t**, int);
-#define call_fn(this_arg,fn) (this_arg->*fn)
 #define __this this
 #else
-    typedef void (* card_fn) (uint8_t**);
-#define call_fn(this_arg,fn) (*fn)
 #define __this (gc_heap*)0
 #endif
 
@@ -3021,7 +3033,6 @@ protected:
         uint8_t* last_plug;
         BOOL is_shortened;
         mark* pinned_plug_entry;
-        relocate_queue *reloc_queue;
     };
 
     PER_HEAP
@@ -3035,7 +3046,7 @@ protected:
     void check_demotion_helper (uint8_t** pval, uint8_t* parent_obj);
 
     PER_HEAP
-    void relocate_survivor_helper (relocate_queue* reloc_queue, uint8_t* plug, uint8_t* plug_end);
+    void relocate_survivor_helper (uint8_t* plug, uint8_t* plug_end);
 
     PER_HEAP
     void verify_pins_with_post_plug_info (const char* msg);
@@ -3046,10 +3057,10 @@ protected:
 #endif //COLLECTIBLE_CLASS
 
     PER_HEAP
-    void relocate_shortened_survivor_helper (relocate_queue* reloc_queue, uint8_t* plug, uint8_t* plug_end, mark* pinned_plug_entry);
+    void relocate_shortened_survivor_helper (uint8_t* plug, uint8_t* plug_end, mark* pinned_plug_entry);
 
     PER_HEAP
-    void relocate_obj_helper (relocate_queue* reloc_queue, uint8_t* x, size_t s);
+    void relocate_obj_helper (uint8_t* x, size_t s);
 
     PER_HEAP
     void reloc_ref_in_shortened_obj (uint8_t** address_to_set_card, uint8_t** address_to_reloc);
@@ -3061,8 +3072,7 @@ protected:
     void relocate_shortened_obj_helper (uint8_t* x, size_t s, uint8_t* end, mark* pinned_plug_entry, BOOL is_pinned);
 
     PER_HEAP
-    void relocate_survivors_in_plug (relocate_queue *reloc_queue,
-                                     uint8_t* plug, uint8_t* plug_end,
+    void relocate_survivors_in_plug (uint8_t* plug, uint8_t* plug_end,
                                      BOOL check_last_object_p,
                                      mark* pinned_plug_entry);
     PER_HEAP
@@ -3166,7 +3176,7 @@ protected:
     PER_HEAP
     void mark_through_cards_helper (uint8_t** poo, size_t& ngen,
                                     size_t& cg_pointers_found,
-                                    card_fn fn, uint8_t* nhigh,
+                                    card_operation card_op, uint8_t* nhigh,
                                     uint8_t* next_boundary,
                                     int condemned_gen,
                                     int current_gen
@@ -3180,7 +3190,10 @@ protected:
                           uint8_t*& limit, size_t& n_cards_cleared
                           CARD_MARKING_STEALING_ARGS(card_marking_enumerator& card_mark_enumerator, heap_segment* seg, size_t& card_word_end_out));
     PER_HEAP
-    void mark_through_cards_for_segments(card_fn fn, BOOL relocating CARD_MARKING_STEALING_ARG(gc_heap* hpt));
+    void mark_through_cards_for_segments(card_operation card_op, BOOL relocating CARD_MARKING_STEALING_ARG(gc_heap* hpt));
+
+    PER_HEAP
+    void call_card_operation(card_operation card_op, uint8_t** poo CARD_MARKING_STEALING_ARG(gc_heap* hpt));
 
 #ifndef USE_REGIONS
     PER_HEAP
@@ -3403,7 +3416,7 @@ protected:
     PER_HEAP
     void relocate_in_uoh_objects (int gen_num);
     PER_HEAP
-    void mark_through_cards_for_uoh_objects(card_fn fn, int oldest_gen_num, BOOL relocating
+    void mark_through_cards_for_uoh_objects(card_operation card_op, int oldest_gen_num, BOOL relocating
                                               CARD_MARKING_STEALING_ARG(gc_heap* hpt));
     PER_HEAP
     void descr_generations (const char* msg);
@@ -5189,6 +5202,11 @@ protected:
     PER_HEAP_ISOLATED
     size_t bookkeeping_sizes[total_bookkeeping_elements];
 #endif //USE_REGIONS
+
+#ifdef USE_RELOC_QUEUE
+    PER_HEAP relocate_queue* reloc_queue;
+#endif //USE_RELOC_QUEUE
+
     PER_HEAP
     mark_queue_t mark_queue;
 }; // class gc_heap
