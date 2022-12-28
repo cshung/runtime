@@ -38506,7 +38506,11 @@ void gc_heap::call_card_operation (card_operation card_op, uint8_t** poo CARD_MA
             hpt->mark_object_simple (poo THREAD_NUMBER_ARG);
             break;
         case card_operation_relocate:
+#ifdef USE_RELOC_QUEUE
+            reloc_queue->queue_reloc (poo, 0, poo);
+#else
             hpt->relocate_address (poo THREAD_NUMBER_ARG);
+#endif //USE_RELOC_QUEUE
             break;
 #ifdef HEAP_ANALYZE
         case card_operation_ha_mark:
