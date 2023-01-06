@@ -11,6 +11,7 @@
 
 $log = $env:andrew_log
 $clrgc = $env:andrew_clrgc
+$trace = $env:andrew_trace
 $server = $env:andrew_server
 
 if ($log -eq "1")
@@ -39,6 +40,13 @@ if ($clrgc -eq "1")
             $env:COMPlus_GCName="libclrgc.dylib"
         }
     }
+}
+
+if ($trace -eq "1")
+{
+    # TODO, Linux
+    $env:COMPlus_AutoTrace_N_Tracers="1"
+    $env:COMPlus_AutoTrace_Command="C:\Dev\diagnostics\src\Tools\dotnet-trace\test.cmd"
 }
 
 if ($server -eq "1")

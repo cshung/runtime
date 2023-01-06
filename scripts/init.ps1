@@ -37,6 +37,8 @@ function Enable-Stress-Log  { Invoke-Expression ((Join-Path $PSScriptRoot "enabl
 function Disable-Stress-Log { Invoke-Expression ((Join-Path $PSScriptRoot "disable-stress-log.ps1" ) + ""         ) }
 function Enable-ClrGc       { Invoke-Expression ((Join-Path $PSScriptRoot "enable-clrgc.ps1"       ) + ""         ) }
 function Disable-ClrGc      { Invoke-Expression ((Join-Path $PSScriptRoot "disable-clrgc.ps1"      ) + ""         ) }
+function Enable-Auto-Trace  { Invoke-Expression ((Join-Path $PSScriptRoot "enable-auto-trace.ps1"  ) + ""         ) }
+function Disable-Auto-Trace { Invoke-Expression ((Join-Path $PSScriptRoot "disable-auto-trace.ps1" ) + ""         ) }
 function Enable-Server      { Invoke-Expression ((Join-Path $PSScriptRoot "enable-server.ps1"      ) + ""         ) }
 function Disable-Server     { Invoke-Expression ((Join-Path $PSScriptRoot "disable-server.ps1"     ) + ""         ) }
 
@@ -71,6 +73,8 @@ Set-Alias -Name esl  Enable-Stress-Log
 Set-Alias -Name dsl  Disable-Stress-Log
 Set-Alias -Name ecg  Enable-ClrGc
 Set-Alias -Name dcg  Disable-ClrGc
+Set-Alias -Name eat  Enable-Auto-Trace
+Set-Alias -Name dat  Disable-Auto-Trace
 Set-Alias -Name svr  Enable-Server
 Set-Alias -Name wks  Disable-Server
 
