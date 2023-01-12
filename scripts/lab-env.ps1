@@ -70,3 +70,8 @@ if ($server -eq "1")
 {
     $env:COMPlus_gcServer="1"
 }
+$env:COMPlus_GCGenAnalysisGen="1"
+$env:COMPlus_GCGenAnalysisBytes="16E360"
+$env:COMPlus_GCGenAnalysisIndex="3E8"
+$env:COMPlus_GCGenAnalysisDump="1"
+$env:COMPlus_GCGenAnalysisTrace="0"
