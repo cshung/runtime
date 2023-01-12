@@ -61,3 +61,9 @@ if ($datas -eq "1")
 {
     $env:DOTNET_GCDynamicAdaptationMode="1"
 }
+
+$env:COMPlus_GCGenAnalysisGen="1"
+$env:COMPlus_GCGenAnalysisBytes="16E360"
+$env:COMPlus_GCGenAnalysisIndex="3E8"
+$env:COMPlus_GCGenAnalysisDump="1"
+$env:COMPlus_GCGenAnalysisTrace="0"
