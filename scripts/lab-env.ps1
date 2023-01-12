@@ -63,3 +63,9 @@ if ($datas -eq "1")
 }
 
 $env:CORE_ROOT=path "$($PSScriptRoot)\..\artifacts\tests\coreclr\$($os).$($arch_part).$($mode_part)\Tests\Core_Root"
+
+$env:COMPlus_GCGenAnalysisGen="1"
+$env:COMPlus_GCGenAnalysisBytes="16E360"
+$env:COMPlus_GCGenAnalysisIndex="3E8"
+$env:COMPlus_GCGenAnalysisDump="1"
+$env:COMPlus_GCGenAnalysisTrace="0"
