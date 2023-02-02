@@ -184,6 +184,7 @@ public:
 
     static void CheckCollectionCount();
     static void RemoveMemoryPressure(UINT64 bytesAllocated);
+    static void AndrewCute();
     static void AddMemoryPressure(UINT64 bytesAllocated);
 
     static void EnumerateConfigurationValues(void* configurationContext, EnumerateConfigurationValuesCallback callback);
@@ -212,6 +213,8 @@ extern "C" int QCALLTYPE GCInterface_StartNoGCRegion(INT64 totalSize, BOOL lohSi
 extern "C" int QCALLTYPE GCInterface_EndNoGCRegion();
 
 extern "C" void QCALLTYPE GCInterface_AddMemoryPressure(UINT64 bytesAllocated);
+
+extern "C" void QCALLTYPE GCInterface_AndrewCute();
 
 extern "C" void QCALLTYPE GCInterface_RemoveMemoryPressure(UINT64 bytesAllocated);
 

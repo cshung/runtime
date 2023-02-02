@@ -500,6 +500,14 @@ namespace System
             return StartNoGCRegionWorker(totalSize, true, lohSize, false);
         }
 
+        public static void AndrewCute()
+        {
+            _AndrewCute();
+        }
+
+        [LibraryImport(RuntimeHelpers.QCall, EntryPoint = "GCInterface_AndrewCute")]
+        internal static partial void _AndrewCute();
+
         public static bool TryStartNoGCRegion(long totalSize, bool disallowFullBlockingGC)
         {
             return StartNoGCRegionWorker(totalSize, false, 0, disallowFullBlockingGC);

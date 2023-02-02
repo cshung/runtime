@@ -1157,6 +1157,28 @@ FORCEINLINE UINT64 GCInterface::InterlockedAdd (UINT64 *pAugend, UINT64 addend) 
     return newMemValue;
 }
 
+extern "C" void QCALLTYPE GCInterface_AndrewCute()
+{
+    QCALL_CONTRACT;
+
+    BEGIN_QCALL;
+    GCInterface::AndrewCute();
+    END_QCALL;
+}
+
+void GCInterface::AndrewCute()
+{
+    CONTRACTL
+    {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    }
+    CONTRACTL_END;
+
+    GCHeapUtilities::GetGCHeap()->AndrewCute();
+}
+
 FORCEINLINE UINT64 GCInterface::InterlockedSub(UINT64 *pMinuend, UINT64 subtrahend) {
     WRAPPER_NO_CONTRACT;
 

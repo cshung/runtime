@@ -48441,6 +48441,11 @@ enable_no_gc_region_callback_status GCHeap::EnableNoGCRegionCallback(NoGCRegionC
     return gc_heap::enable_no_gc_callback(callback, callback_threshold);
 }
 
+void GCHeap::AndrewCute()
+{
+    printf("Andrew wins!\n");
+}
+
 FinalizerWorkItem* GCHeap::GetExtraWorkForFinalization()
 {
     return Interlocked::ExchangePointer(&gc_heap::finalizer_work, nullptr);

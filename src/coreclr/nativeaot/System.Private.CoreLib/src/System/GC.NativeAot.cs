@@ -362,6 +362,10 @@ namespace System
             }
         }
 
+        public static void AndrewCute()
+        {
+        }
+
         /// <summary>
         /// Attempts to disallow garbage collection during execution of a critical path.
         /// </summary>

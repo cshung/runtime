@@ -1018,6 +1018,8 @@ public:
     virtual FinalizerWorkItem* GetExtraWorkForFinalization() PURE_VIRTUAL
 
     virtual uint64_t GetGenerationBudget(int generation) PURE_VIRTUAL
+    // AndrewCute
+    virtual void AndrewCute() PURE_VIRTUAL
 };
 
 #ifdef WRITE_BARRIER_CHECK

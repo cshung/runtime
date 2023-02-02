@@ -11,7 +11,15 @@ namespace CoreLab
     {
         private static void Main()
         {
-            Console.WriteLine("Andrew wins");
+            MethodInfo andrewCuteMethod = typeof(GC).GetMethod("AndrewCute", BindingFlags.Public | BindingFlags.Static);
+            if (andrewCuteMethod == null)
+            {
+                Console.WriteLine("AndrewCute method not found");
+            }
+            else
+            {
+                andrewCuteMethod.Invoke(null, Array.Empty<object>());
+            }
         }
     }
 }
