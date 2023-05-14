@@ -12,7 +12,8 @@ DEFINE_FIELD       (heap_analyze_success,               BOOL)
 DEFINE_FIELD       (card_table,                         uint32_t*)
 
 #if defined(ALL_FIELDS) || defined(BACKGROUND_GC)
-DEFINE_FIELD       (mark_array,                         uint32_t*)
+// TODO, AndrewAu, fix the debugger
+// DEFINE_FIELD       (mark_array,                         uint32_t*)
 DEFINE_FIELD       (next_sweep_obj,                     uint8_t*)    
 DEFINE_FIELD       (background_saved_lowest_address,    uint8_t*)
 DEFINE_FIELD       (background_saved_highest_address,   uint8_t*)
@@ -26,7 +27,8 @@ DEFINE_MISSING_FIELD(saved_sweep_ephemeral_seg)
 DEFINE_MISSING_FIELD(saved_sweep_ephemeral_start)
 #endif // defined(ALL_FIELDS) || !defined(USE_REGIONS)
 #else
-DEFINE_MISSING_FIELD(mark_array)
+// TODO, AndrewAu, fix the debugger
+// DEFINE_MISSING_FIELD(mark_array)
 DEFINE_MISSING_FIELD(next_sweep_obj)
 DEFINE_MISSING_FIELD(background_saved_lowest_address)
 DEFINE_MISSING_FIELD(background_saved_highest_address)

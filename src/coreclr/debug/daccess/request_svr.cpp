@@ -138,7 +138,8 @@ ClrDataAccess::ServerGCHeapDetails(CLRDATA_ADDRESS heapAddr, DacpGcHeapDetails *
     if (IsBackgroundGCEnabled())
     {
         detailsData->current_c_gc_state = (CLRDATA_ADDRESS)*g_gcDacGlobals->current_c_gc_state;
-        detailsData->mark_array = (CLRDATA_ADDRESS)pHeap->mark_array;
+        // TODO, AndrewAu, fix the debugger
+        // detailsData->mark_array = (CLRDATA_ADDRESS)pHeap->mark_array;
         detailsData->next_sweep_obj = (CLRDATA_ADDRESS)pHeap->next_sweep_obj;
         detailsData->background_saved_lowest_address = (CLRDATA_ADDRESS)pHeap->background_saved_lowest_address;
         detailsData->background_saved_highest_address = (CLRDATA_ADDRESS)pHeap->background_saved_highest_address;

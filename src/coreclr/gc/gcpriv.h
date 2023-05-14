@@ -3709,7 +3709,7 @@ private:
 #endif //CARD_BUNDLE
 #ifdef BACKGROUND_GC
     // The content is updated during GCs and by the UOH allocator code paths
-    PER_HEAP_FIELD_INIT_ONLY uint32_t* mark_array;
+    PER_HEAP_ISOLATED_FIELD_INIT_ONLY uint32_t* mark_array;
 #endif //BACKGROUND_GC
 
 #ifdef MULTIPLE_HEAPS

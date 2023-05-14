@@ -2165,9 +2165,9 @@ void* virtual_alloc (size_t size);
 void* virtual_alloc (size_t size, bool use_large_pages_p, uint16_t numa_node = NUMA_NODE_UNDEFINED);
 
 /* per heap static initialization */
-#if defined(BACKGROUND_GC) && !defined(MULTIPLE_HEAPS)
+#if defined(BACKGROUND_GC)
 uint32_t*   gc_heap::mark_array;
-#endif //BACKGROUND_GC && !MULTIPLE_HEAPS
+#endif //BACKGROUND_GC
 
 uint8_t**   gc_heap::g_mark_list;
 uint8_t**   gc_heap::g_mark_list_copy;
@@ -9409,7 +9409,7 @@ fail:
 #ifdef BACKGROUND_GC
         if (hp->is_bgc_in_progress())
         {
-            dprintf (GC_TABLE_LOG, ("in range new seg %p, mark_array is %p", new_seg, hp->mark_array));
+            dprintf (GC_TABLE_LOG, ("in range new seg %p, mark_array is %p", new_seg, mark_array));
             if (!commit_mark_array_new_seg (hp, new_seg))
             {
                 dprintf (GC_TABLE_LOG, ("failed to commit mark array for the new seg in range"));
@@ -34736,7 +34736,7 @@ BOOL gc_heap::commit_mark_array_new_seg (gc_heap* hp,
         commit_start = max (lowest, start);
         commit_end = min (highest, end);
 
-        if (!commit_mark_array_by_range (commit_start, commit_end, hp->mark_array))
+        if (!commit_mark_array_by_range (commit_start, commit_end, mark_array))
         {
             return FALSE;
         }
@@ -34758,7 +34758,7 @@ BOOL gc_heap::commit_mark_array_new_seg (gc_heap* hp,
 
             dprintf (GC_TABLE_LOG, ("table realloc-ed: %p->%p, MA: %p->%p",
                                     hp->card_table, new_card_table,
-                                    hp->mark_array, ma));
+                                    mark_array, ma));
 
             if (!commit_mark_array_by_range (commit_start, commit_end, ma))
             {
