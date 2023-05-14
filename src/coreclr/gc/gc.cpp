@@ -11466,7 +11466,16 @@ heap_segment* gc_heap::get_free_region (int gen_number, size_t size)
             region = free_regions[huge_free_region].unlink_smallest_region (size);
             if (region == nullptr)
             {
-                ASSERT_HOLDING_SPIN_LOCK(&gc_lock);
+                if (settings.pause_mode == pause_no_gc)
+                {
+                    // In case of no-gc-region, the gc lock is being held by the thread
+                    // triggering the GC.
+                    assert (gc_lock.holding_thread != (Thread*)-1);
+                }
+                else
+                {
+                    ASSERT_HOLDING_SPIN_LOCK(&gc_lock);
+                }
 
                 // get it from the global list of huge free regions
                 region = global_free_huge_regions.unlink_smallest_region (size);
@@ -22382,7 +22391,10 @@ bool gc_heap::extend_soh_for_no_gc()
             region = heap_segment_next (region);
             if (region == nullptr)
             {
-                region = get_new_region (0);
+                if (!current_no_gc_region_info.minimal_gc_p)
+                {
+                    region = get_new_region (0);
+                }
                 if (region == nullptr)
                 {
                     break;
