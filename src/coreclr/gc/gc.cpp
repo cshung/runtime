@@ -6988,7 +6988,7 @@ bool gc_heap::virtual_commit (void* address, size_t size, int bucket, int h_numb
     assert(bucket < total_oh_count || h_number == -1);
     assert(bucket != recorded_committed_free_bucket);
 
-    dprintf(3, ("commit-accounting:  commit in %d [%p, %p) for heap %d", bucket, address, ((uint8_t*)address + size), h_number));
+    printf("commit-accounting:  commit in %d [%p, %p) for heap %d (delta = %d)\n", bucket, address, ((uint8_t*)address + size), h_number, size);
 
 #ifndef COMMITTED_BYTES_SHADOW
     if (heap_hard_limit)
@@ -7096,7 +7096,7 @@ bool gc_heap::virtual_decommit (void* address, size_t size, int bucket, int h_nu
 
     bool decommit_succeeded_p = GCToOSInterface::VirtualDecommit (address, size);
 
-    dprintf(3, ("commit-accounting:  decommit in %d [%p, %p) for heap %d", bucket, address, ((uint8_t*)address + size), h_number));
+    printf("commit-accounting:  decommit in %d [%p, %p) for heap %d (delta = %d)\n", bucket, address, ((uint8_t*)address + size), h_number, size);
 
     if (decommit_succeeded_p)
 #ifndef COMMITTED_BYTES_SHADOW
@@ -11395,7 +11395,7 @@ void gc_heap::clear_region_info (heap_segment* region)
 void gc_heap::return_free_region (heap_segment* region)
 {
     gc_oh_num oh = heap_segment_oh (region);
-    dprintf(3, ("commit-accounting:  from %d to free [%p, %p) for heap %d", oh, get_region_start (region), heap_segment_committed (region), heap_number));
+    printf("commit-accounting:  from %d to free [%p, %p) for heap %d (delta = %d)\n", oh, get_region_start (region), heap_segment_committed (region), heap_number, (heap_segment_committed (region) - get_region_start (region)));
 #ifndef COMMITTED_BYTES_SHADOW
     if (heap_hard_limit)
 #endif //!COMMITTED_BYTES_SHADOW
@@ -11483,7 +11483,7 @@ heap_segment* gc_heap::get_free_region (int gen_number, size_t size)
                            gen_number, true);
 
         gc_oh_num oh = gen_to_oh (gen_number);
-        dprintf(3, ("commit-accounting:  from free to %d [%p, %p) for heap %d", oh, get_region_start (region), heap_segment_committed (region), heap_number));
+        printf("commit-accounting:  from free to %d [%p, %p) for heap %d (delta = %d)\n", oh, get_region_start (region), heap_segment_committed (region), heap_number, (heap_segment_committed (region) - get_region_start (region)));
 #ifndef COMMITTED_BYTES_SHADOW
         if (heap_hard_limit)
 #endif //!COMMITTED_BYTES_SHADOW
@@ -23293,7 +23293,7 @@ heap_segment* gc_heap::unlink_first_rw_region (int gen_idx)
     {
         int old_oh = heap_segment_oh (region);
         int old_heap = heap_segment_heap (region)->heap_number;
-        dprintf(3, ("commit-accounting:  from %d to temp [%p, %p) for heap %d", old_oh, get_region_start (region), heap_segment_committed (region), old_heap));
+        printf("commit-accounting:  from %d to temp [%p, %p) for heap %d (delta = %d)\n", old_oh, get_region_start (region), heap_segment_committed (region), old_heap, (heap_segment_committed (region) - get_region_start (region)));
 
         size_t committed = heap_segment_committed (region) - get_region_start (region);
         check_commit_cs.Enter();
@@ -23332,7 +23332,7 @@ void gc_heap::thread_rw_region_front (int gen_idx, heap_segment* region)
     {
         int new_oh = gen_to_oh (gen_idx);
         int new_heap = this->heap_number;
-        dprintf(3, ("commit-accounting:  from temp to %d [%p, %p) for heap %d", new_oh, get_region_start (region), heap_segment_committed (region), new_heap));
+        printf("commit-accounting:  from temp to %d [%p, %p) for heap %d (delta = %d)\n", new_oh, get_region_start (region), heap_segment_committed (region), new_heap, ((heap_segment_committed (region) - get_region_start (region))));
 
         size_t committed = heap_segment_committed (region) - get_region_start (region);
         check_commit_cs.Enter();
@@ -44644,9 +44644,10 @@ void gc_heap::verify_regions (bool can_verify_gen_num, bool concurrent_p)
 #endif // MULTIPLE_HEAPS
             if (total_committed != total_accounted)
             {
+                printf("Commit verification failed on generation %d, (looped) %d =/= %d (stored)\n", i, total_committed, total_accounted);
                 FATAL_GC_ERROR();
             }
-            dprintf(3, ("commit-accounting:  checkpoint for %d for heap %d", oh, heap_number));
+            printf("commit-accounting:  checkpoint for %d for heap %d\n", oh, heap_number);
             total_committed = 0;
         }
 
@@ -49472,6 +49473,7 @@ int gc_heap::refresh_memory_limit()
 
 #ifdef USE_REGIONS
     decommit_lock.Enter();
+    printf("refresh_memory_limit accounting starts\n");
     size_t total_committed = 0;
     size_t committed_bookkeeping = 0;
     size_t new_current_total_committed;
@@ -49509,6 +49511,10 @@ int gc_heap::refresh_memory_limit()
             heap->committed_by_oh_per_heap_refresh[oh] = total_committed_per_heap;
 #endif //MULTIPLE_HEAPS && _DEBUG
             total_committed_per_oh += total_committed_per_heap;
+        }
+        if (oh == soh)
+        {
+            printf("Refresh thinks the answer should be %d\n", total_committed_per_oh);
         }
         new_committed_by_oh[oh] = total_committed_per_oh;
         total_committed += total_committed_per_oh;

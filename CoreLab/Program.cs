@@ -11,7 +11,17 @@ namespace CoreLab
     {
         private static void Main()
         {
-            Console.WriteLine("Andrew wins");
+            AppContext.SetData("GCHeapHardLimit", (ulong)209715200);
+
+            var gcType = typeof(GC);
+            var method = gcType.GetMethod("_RefreshMemoryLimit", BindingFlags.NonPublic | BindingFlags.Static);
+            if (method == null)
+                throw new Exception("Failed to find _RefreshMemoryLimit method through reflection");
+
+            var result = method.Invoke(null, Array.Empty<object>());
+            GC.Collect();
+            Console.WriteLine("Result of Refresh: " + result);
+            Console.WriteLine("TotalAvailableMemoryBytes = " + GC.GetGCMemoryInfo().TotalAvailableMemoryBytes);
         }
     }
 }
