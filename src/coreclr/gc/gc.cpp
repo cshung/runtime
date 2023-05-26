@@ -2869,6 +2869,10 @@ bool gc_heap::special_sweep_p = false;
 
 int gc_heap::loh_pinned_queue_decay = LOH_PIN_DECAY;
 
+uint8_t** gc_heap::background_allocated_small_poh_objects = nullptr;
+uint32_t gc_heap::num_background_allocated_small_poh_objects = 0;
+VOLATILE(uint32_t) gc_heap::background_allocated_small_poh_objects_index = 0;
+
 #endif // MULTIPLE_HEAPS
 
 /* end of per heap static initialization */
@@ -36371,6 +36375,9 @@ void gc_heap::bgc_thread_function()
             dprintf (3, ("no concurrent GC needed, exiting"));
             break;
         }
+#ifndef MULTIPLE_HEAPS
+        background_allocated_small_poh_objects_index = 0;
+#endif //MULTIPLE_HEAPS
         gc_background_running = TRUE;
         dprintf (2, (ThreadStressLog::gcStartBgcThread(), heap_number,
             generation_free_list_space (generation_of (max_generation)),
@@ -41939,102 +41946,127 @@ BOOL gc_heap::ephemeral_gen_fit_p (gc_tuning_point tp)
 
 CObjectHeader* gc_heap::allocate_uoh_object (size_t jsize, uint32_t flags, int gen_number, int64_t& alloc_bytes)
 {
-    //create a new alloc context because gen3context is shared.
-    alloc_context acontext;
-    acontext.init();
+    while (true)
+    {
+        //create a new alloc context because gen3context is shared.
+        alloc_context acontext;
+        acontext.init();
 
 #if HOST_64BIT
-    size_t maxObjectSize = (INT64_MAX - 7 - Align(min_obj_size));
+        size_t maxObjectSize = (INT64_MAX - 7 - Align(min_obj_size));
 #else
-    size_t maxObjectSize = (INT32_MAX - 7 - Align(min_obj_size));
+        size_t maxObjectSize = (INT32_MAX - 7 - Align(min_obj_size));
 #endif
 
-    if (jsize >= maxObjectSize)
-    {
-        if (GCConfig::GetBreakOnOOM())
+        if (jsize >= maxObjectSize)
         {
-            GCToOSInterface::DebugBreak();
+            if (GCConfig::GetBreakOnOOM())
+            {
+                GCToOSInterface::DebugBreak();
+            }
+            return NULL;
         }
-        return NULL;
-    }
 
-    size_t size = AlignQword (jsize);
-    int align_const = get_alignment_constant (FALSE);
-    size_t pad = 0;
+        size_t size = AlignQword (jsize);
+        int align_const = get_alignment_constant (FALSE);
+        size_t pad = 0;
 #ifdef FEATURE_LOH_COMPACTION
-    if (gen_number == loh_generation)
-    {
-        pad = Align (loh_padding_obj_size, align_const);
-    }
+        if (gen_number == loh_generation)
+        {
+            pad = Align (loh_padding_obj_size, align_const);
+        }
 #endif //FEATURE_LOH_COMPACTION
 
-    assert (size >= Align (min_obj_size, align_const));
+        assert (size >= Align (min_obj_size, align_const));
 #ifdef _MSC_VER
 #pragma inline_depth(0)
 #endif //_MSC_VER
-    if (! allocate_more_space (&acontext, (size + pad), flags, gen_number))
-    {
-        return 0;
-    }
+        if (! allocate_more_space (&acontext, (size + pad), flags, gen_number))
+        {
+            return 0;
+        }
 
 #ifdef _MSC_VER
 #pragma inline_depth(20)
 #endif //_MSC_VER
 
 #ifdef FEATURE_LOH_COMPACTION
-    // The GC allocator made a free object already in this alloc context and
-    // adjusted the alloc_ptr accordingly.
+        // The GC allocator made a free object already in this alloc context and
+        // adjusted the alloc_ptr accordingly.
 #endif //FEATURE_LOH_COMPACTION
 
-    uint8_t*  result = acontext.alloc_ptr;
+        uint8_t*  result = acontext.alloc_ptr;
+        gc_heap* heap = heap_of (result);
 
-    assert ((size_t)(acontext.alloc_limit - acontext.alloc_ptr) == size);
-    alloc_bytes += size;
+        assert ((size_t)(acontext.alloc_limit - acontext.alloc_ptr) == size);
+        alloc_bytes += size;
 
-    CObjectHeader* obj = (CObjectHeader*)result;
+        CObjectHeader* obj = (CObjectHeader*)result;
 
 #ifdef BACKGROUND_GC
-    if (gc_heap::background_running_p())
-    {
-        uint8_t* current_lowest_address = background_saved_lowest_address;
-        uint8_t* current_highest_address = background_saved_highest_address;
-
-        if ((result < current_highest_address) && (result >= current_lowest_address))
+        if (gc_heap::background_running_p())
         {
-            dprintf (3, ("Clearing mark bit at address %zx",
-                     (size_t)(&mark_array [mark_word_of (result)])));
+            uint8_t* current_lowest_address = heap->background_saved_lowest_address;
+            uint8_t* current_highest_address = heap->background_saved_highest_address;
 
-            mark_array_clear_marked (result);
-        }
-        if (current_c_gc_state != c_gc_state_free)
-        {
-            dprintf (3, ("Concurrent allocation of a large object %zx",
-                        (size_t)obj));
-            //mark the new block specially so we know it is a new object
             if ((result < current_highest_address) && (result >= current_lowest_address))
             {
-#ifdef DOUBLY_LINKED_FL
-                heap_segment* seg = seg_mapping_table_segment_of (result);
-                // if bgc_allocated is 0 it means it was allocated during bgc sweep,
-                // and since sweep does not look at this seg we cannot set the mark array bit.
-                uint8_t* background_allocated = heap_segment_background_allocated(seg);
-                if (background_allocated != 0)
-#endif //DOUBLY_LINKED_FL
+                assert (!heap->is_mark_bit_set (result));
+            }
+            if (current_c_gc_state != c_gc_state_free)
+            {
+                dprintf (3, ("Concurrent allocation of a large object %zx",
+                            (size_t)obj));
+                //mark the new block specially so we know it is a new object
+                if ((result < current_highest_address) && (result >= current_lowest_address))
                 {
-                    dprintf(3, ("Setting mark bit at address %zx",
-                        (size_t)(&mark_array[mark_word_of(result)])));
+#ifdef DOUBLY_LINKED_FL
+                    heap_segment* seg = seg_mapping_table_segment_of (result);
+                    // if bgc_allocated is 0 it means it was allocated during bgc sweep,
+                    // and since sweep does not look at this seg we cannot set the mark array bit.
+                    uint8_t* background_allocated = heap_segment_background_allocated(seg);
+                    if (background_allocated != 0)
+#endif //DOUBLY_LINKED_FL
+                    {
+#ifndef MULTIPLE_HEAPS
+                        uint32_t local_background_allocated_small_poh_objects_index = num_background_allocated_small_poh_objects;
+                        if (gen_number == poh_generation && jsize < mark_word_size)
+                        {
+                            local_background_allocated_small_poh_objects_index = Interlocked::Increment(&background_allocated_small_poh_objects_index) - 1;
+                            if (local_background_allocated_small_poh_objects_index >= num_background_allocated_small_poh_objects)
+                            {
+                                dprintf (3, ("Failed to add %p into background_allocated_small_poh_objects", result));
+                                make_unused_array (result, size);
+                                bgc_untrack_uoh_alloc();
+                                bgc_alloc_lock->uoh_alloc_done (result);
+                                background_gc_wait();
+                                continue;
+                            }
+                            else
+                            {
+                                dprintf (3, ("Added %p into background_allocated_small_poh_objects", result));
+                                background_allocated_small_poh_objects[local_background_allocated_small_poh_objects_index] = result;
+                            }
+                        }
+                        else
+                        {
+                            dprintf(3, ("Setting mark bit at address %zx",
+                                (size_t)(&mark_array[mark_word_of(result)])));
 
-                    mark_array_set_marked(result);
+                            mark_array_set_marked(result);
+                        }
+#endif //MULTIPLE_HEAPS
+                    }
                 }
             }
         }
-    }
 #endif //BACKGROUND_GC
 
-    assert (obj != 0);
-    assert ((size_t)obj == Align ((size_t)obj, align_const));
+        assert (obj != 0);
+        assert ((size_t)obj == Align ((size_t)obj, align_const));
 
-    return obj;
+        return obj;
+    }
 }
 
 void reset_memory (uint8_t* o, size_t sizeo)
@@ -43108,7 +43140,52 @@ void gc_heap::background_sweep()
             {
                 spin_and_switch (spin_count, (uoh_alloc_thread_count == 0));
             }
-
+#ifndef MULTIPLE_HEAPS
+            uint32_t last_slot_index = min(num_background_allocated_small_poh_objects, VolatileLoad(&background_allocated_small_poh_objects_index));
+            for (uint32_t i = 0; i < last_slot_index; i++)
+            {
+                if (background_allocated_small_poh_objects[i])
+                {
+                    uint8_t* background_allocated_small_poh_object = background_allocated_small_poh_objects[i];
+                    assert (!contain_pointers(background_allocated_small_poh_object));
+                    mark_array_set_marked (background_allocated_small_poh_object);
+#ifdef COLLECTIBLE_CLASS
+                    if (is_collectible (background_allocated_small_poh_object))
+                    {
+                        mark_array_set_marked (get_class_object (background_allocated_small_poh_object));
+                    }
+#endif //COLLECTIBLE_CLASS
+                }
+            }
+            uint32_t min_background_allocated_small_poh_objects = 16;
+            uint32_t max_background_allocated_small_poh_objects = 8192;
+            if (background_allocated_small_poh_objects_index > num_background_allocated_small_poh_objects)
+            {
+                bool skip = false;
+                if (num_background_allocated_small_poh_objects == 0) 
+                {
+                    num_background_allocated_small_poh_objects = min_background_allocated_small_poh_objects;
+                }
+                else if (num_background_allocated_small_poh_objects < max_background_allocated_small_poh_objects)
+                {
+                    num_background_allocated_small_poh_objects = num_background_allocated_small_poh_objects * 2;
+                }
+                else
+                {
+                    skip = background_allocated_small_poh_objects != nullptr;
+                }
+                if (!skip)
+                {
+                    delete[] background_allocated_small_poh_objects;
+                    background_allocated_small_poh_objects = new (nothrow) uint8_t*[num_background_allocated_small_poh_objects];
+                    if (background_allocated_small_poh_objects == nullptr)
+                    {
+                        num_background_allocated_small_poh_objects = 0;
+                    }
+                    background_allocated_small_poh_objects_index = 0;
+                }
+            }
+#endif //MULTIPLE_HEAPS
             current_bgc_state = bgc_sweep_uoh;
         }
     }
@@ -46423,7 +46500,7 @@ GCHeap::Alloc(gc_alloc_context* context, size_t size, uint32_t flags REQD_ALIGN_
         ASSERT(65536 < loh_size_threshold);
 
         int gen_num = (flags & GC_ALLOC_PINNED_OBJECT_HEAP) ? poh_generation : loh_generation;
-        newAlloc = (Object*) hp->allocate_uoh_object (size + ComputeMaxStructAlignPadLarge(requiredAlignment), flags, gen_num, acontext->alloc_bytes_uoh);
+        newAlloc = (Object*) gc_heap::allocate_uoh_object (size + ComputeMaxStructAlignPadLarge(requiredAlignment), flags, gen_num, acontext->alloc_bytes_uoh);
         ASSERT(((size_t)newAlloc & 7) == 0);
 
 #ifdef MULTIPLE_HEAPS

@@ -1566,9 +1566,7 @@ public:
     // For UOH allocations we only update the alloc_bytes_uoh in allocation
     // context - we don't actually use the ptr/limit from it so I am
     // making this explicit by not passing in the alloc_context.
-    // Note: This are instance methods, but the heap instance is only used for
-    // lowest_address and highest_address, which are currently the same across all heaps.
-    PER_HEAP
+    PER_HEAP_ISOLATED
     CObjectHeader* allocate_uoh_object (size_t size, uint32_t flags, int gen_num, int64_t& alloc_bytes);
 
 #ifdef FEATURE_STRUCTALIGN
@@ -4499,6 +4497,18 @@ protected:
 
     PER_HEAP
     size_t          c_mark_list_index;
+
+#ifndef MULTIPLE_HEAPS
+    PER_HEAP_ISOLATED
+    uint32_t           num_background_allocated_small_poh_objects;
+
+    PER_HEAP_ISOLATED
+    VOLATILE(uint32_t) background_allocated_small_poh_objects_index;
+
+    PER_HEAP_ISOLATED
+    uint8_t**          background_allocated_small_poh_objects;
+#endif //MULTIPLE_HEAPS
+
 #endif //BACKGROUND_GC
 
     PER_HEAP
