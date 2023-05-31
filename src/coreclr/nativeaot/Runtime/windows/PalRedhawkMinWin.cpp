@@ -827,3 +827,31 @@ REDHAWK_PALIMPORT void REDHAWK_PALAPI PAL_GetCpuCapabilityFlags(int* flags)
 }
 
 #endif
+
+#define MEMORY_MAPPED_STRESSLOG_BASE_ADDRESS (void*)0x400000000000
+
+void* PalCreateMemoryMappedFile(wchar_t* logFilename, size_t maxBytesTotal)
+{
+    HANDLE hFile = CreateFileW(logFilename,
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ,
+        NULL,                 // default security descriptor
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL);
+
+    if (hFile == INVALID_HANDLE_VALUE)
+    {
+        return nullptr;
+    }
+
+    size_t fileSize = maxBytesTotal;
+    HANDLE hMap = CreateFileMappingW(hFile, NULL, PAGE_READWRITE, (DWORD)(fileSize >> 32), (DWORD)fileSize, NULL);
+    if (hMap == NULL)
+    {
+        CloseHandle(hFile);
+        return nullptr;
+    }
+
+    return MapViewOfFileEx(hMap, FILE_MAP_ALL_ACCESS, 0, 0, fileSize, MEMORY_MAPPED_STRESSLOG_BASE_ADDRESS);
+}

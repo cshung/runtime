@@ -1549,3 +1549,9 @@ REDHAWK_PALEXPORT void REDHAWK_PALAPI PAL_GetCpuCapabilityFlags(int* flags)
 #endif // HAVE_AUXV_HWCAP_H
 }
 #endif
+
+// TODO, AndrewAu, implement the actual work to do memory mapped files for Unix here
+void* PalCreateMemoryMappedFile(wchar_t* logFilename, size_t maxBytesTotal)
+{
+    return nullptr;
+}

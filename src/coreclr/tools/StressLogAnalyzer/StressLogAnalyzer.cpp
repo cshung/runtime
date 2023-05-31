@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
 
         if (error != 0)
         {
+            printf("Andrew is debugging here\n");
             printf("error %d occurred\n", error);
         }
 

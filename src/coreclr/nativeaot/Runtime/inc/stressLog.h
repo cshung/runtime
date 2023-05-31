@@ -19,6 +19,8 @@
 //   log.
 // ---------------------------------------------------------------------------
 
+#define MEMORY_MAPPED_STRESSLOG
+
 #ifndef StressLog_h
 #define StressLog_h  1
 
@@ -296,7 +298,7 @@ public:
     unsigned facilitiesToLog;               // Bitvector of facilities to log (see loglf.h)
     unsigned levelToLog;                    // log level
     unsigned MaxSizePerThread;              // maximum number of bytes each thread should have before wrapping
-    unsigned MaxSizeTotal;                  // maximum memory allowed for stress log
+    size_t   MaxSizeTotal;                  // maximum memory allowed for stress log
     int32_t totalChunk;                       // current number of total chunks allocated
     PTR_ThreadStressLog logs;               // the list of logs for every thread.
     int32_t deadCount;                        // count of dead threads in the log
@@ -475,6 +477,46 @@ public:
 
 // private: // static variables
     static StressLog theLog;    // We only have one log, and this is it
+
+#ifdef MEMORY_MAPPED_STRESSLOG
+
+    //
+    // Intentionally avoid unmapping the file during destructor to avoid a race
+    // condition between additional logging in other thread and the destructor.
+    //
+    // The operating system will make sure the file get unmapped during process shutdown
+    //
+    void* hMapView;
+    static void* AllocMemoryMapped(size_t n);
+
+    static const int MAX_MODULES = 5;
+
+    struct ModuleDesc
+    {
+        uint8_t* baseAddress;
+        size_t   size;
+    };
+
+    struct StressLogHeader
+    {
+        size_t           headerSize;                // size of this header including size field and moduleImage
+        uint32_t         magic;                     // must be 'STRL'
+        uint32_t         version;                   // must be 0x00010001
+        uint8_t*         memoryBase;                // base address of the memory mapped file
+        uint8_t*         memoryCur;                 // highest address currently used
+        uint8_t*         memoryLimit;               // limit that can be used
+        ThreadStressLog* logs;                      // the list of logs for every thread.
+        uint64_t         tickFrequency;             // number of ticks per second
+        uint64_t         startTimeStamp;            // start time from when tick counter started
+        uint32_t         threadsWithNoLog;          // threads that didn't get a log
+        uint32_t         reserved1;
+        uint64_t         reserved2[15];             // for future expansion
+        ModuleDesc       modules[MAX_MODULES];      // descriptor of the modules images
+        uint8_t          moduleImage[64*1024*1024]; // copy of the module images described by modules field
+    };
+
+    StressLogHeader* stressLogHeader;       // header to find things in the memory mapped file
+#endif // MEMORY_MAPPED_STRESSLOG
 };
 
 
@@ -538,6 +580,10 @@ struct StressLogChunk
     uint32_t dwSig1;
     uint32_t dwSig2;
 
+#ifdef MEMORY_MAPPED_STRESSLOG
+    static bool s_memoryMapped;
+#endif //MEMORY_MAPPED_STRESSLOG
+
 #ifndef DACCESS_COMPILE
 
     StressLogChunk (PTR_StressLogChunk p = NULL, PTR_StressLogChunk n = NULL)
@@ -560,6 +606,11 @@ struct StressLogChunk
     {
         return dwSig1 == 0xCFCFCFCF && dwSig2 == 0xCFCFCFCF;
     }
+
+#if defined(MEMORY_MAPPED_STRESSLOG)
+    void* operator new (size_t count, const std::nothrow_t& tag);
+    void  operator delete (void * chunk);
+#endif
 };
 
 //==========================================================================================
@@ -635,6 +686,11 @@ public:
     {
         return chunkListHead != NULL && (!curWriteChunk || curWriteChunk->IsValid ());
     }
+
+#if defined(MEMORY_MAPPED_STRESSLOG)
+    void* operator new (size_t count, const std::nothrow_t& tag);
+    void  operator delete (void * chunk);
+#endif
 
     #define STATIC_CONTRACT_LEAF
     #include "../../../inc/gcmsg.inl"

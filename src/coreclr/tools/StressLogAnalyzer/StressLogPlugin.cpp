@@ -1303,6 +1303,8 @@ int ProcessStressLog(void* baseAddress, int argc, char* argv[])
         hdr->magic != *(uint32_t*)"LRTS" ||
         hdr->version != 0x00010001)
     {
+        printf("Header size mismatch? %d %d\n", (int)hdr->headerSize, (int)sizeof(*hdr));
+        printf("Version game? %x\n", hdr->version);
         printf("Unrecognized file format\n");
         return 1;
     }

@@ -13851,6 +13851,7 @@ HRESULT gc_heap::initialize_gc (size_t soh_segment_size,
 #endif //MULTIPLE_HEAPS
 )
 {
+    dprintf (1, ("Do it\n"));
 #ifdef TRACE_GC
     if (GCConfig::GetLogEnabled())
     {
