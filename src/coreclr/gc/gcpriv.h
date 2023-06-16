@@ -138,7 +138,7 @@ inline void FATAL_GC_ERROR()
 // This means any empty regions can be freely used for any generation. For
 // Server GC we will balance regions between heaps.
 // For now disable regions for StandAlone GC, NativeAOT and MacOS builds
-#if defined (HOST_64BIT) && !defined (BUILD_AS_STANDALONE) && !defined(__APPLE__)
+#if defined (HOST_64BIT) && defined (BUILD_AS_STANDALONE) && !defined(__APPLE__)
 #define USE_REGIONS
 #endif //HOST_64BIT && BUILD_AS_STANDALONE
 
@@ -2976,7 +2976,7 @@ private:
 
     PER_HEAP_METHOD void trim_youngest_desired_low_memory();
 
-    PER_HEAP_METHOD ptrdiff_t estimate_gen_growth (int gen);
+    PER_HEAP_METHOD ptrdiff_t estimate_gen_growth (int gen, bool for_bgc = false);
 
     PER_HEAP_METHOD void decommit_ephemeral_segment_pages();
 
@@ -4140,6 +4140,10 @@ private:
     // See comments for heap_hard_limit.
     PER_HEAP_ISOLATED_FIELD_MAINTAINED_ALLOC size_t current_total_committed;
     PER_HEAP_ISOLATED_FIELD_MAINTAINED_ALLOC size_t committed_by_oh[recorded_committed_bucket_counts];
+
+    // AndrewAu
+    PER_HEAP_ISOLATED_FIELD_MAINTAINED_ALLOC uint32_t uoh_try_fit_segment_end_count;
+    PER_HEAP_ISOLATED_FIELD_MAINTAINED_ALLOC uint32_t uoh_try_fit_segment_end_fail_count;
 
     /********************************************/
     // PER_HEAP_ISOLATED_FIELD_INIT_ONLY fields //

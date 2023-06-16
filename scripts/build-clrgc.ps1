@@ -19,7 +19,7 @@ switch($os)
 {
     "windows"
         {
-            $prefix = "cmd /c '`"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat`" -arch=$($arch_part_2) -host_arch=$($arch_part_2) & "
+            $prefix = "cmd /c '`"C:\Program Files\Microsoft Visual Studio\2022\IntPreview\Common7\Tools\VsDevCmd.bat`" -arch=$($arch_part_2) -host_arch=$($arch_part_2) & "
             $postfix = "'"
             $target = "clrgc.dll"
             $filename = "clrgc.dll"
