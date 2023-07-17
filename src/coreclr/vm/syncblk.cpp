@@ -942,8 +942,10 @@ DWORD SyncBlockCache::NewSyncBlockSlot(Object *obj)
         m_FreeSyncTableIndex ++;
     }
 
-
-    CardTableSetBit (indexNewEntry);
+    if (GCHeapUtilities::GetGCHeap()->IsEphemeral (obj))
+    {
+        CardTableSetBit (indexNewEntry);
+    }
 
     // In debug builds the m_SyncBlock at indexNewEntry should already be null, since we should
     // start out with a null table and always null it out on delete.
