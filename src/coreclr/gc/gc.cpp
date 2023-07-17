@@ -3168,16 +3168,43 @@ uint32_t limit_time_to_uint32 (uint64_t time)
     return (uint32_t)time;
 }
 
+size_t permillage (float percentage)
+{
+    int result = (int)(percentage*10);
+    if (result < 0)
+        return 0;
+    else if (result > 999)
+        return 999;
+    else
+        return result;
+}
+
 void gc_heap::fire_per_heap_hist_event (gc_history_per_heap* current_gc_data_per_heap, int heap_num)
 {
     maxgen_size_increase* maxgen_size_info = &(current_gc_data_per_heap->maxgen_size_info);
+
+#ifdef DYNAMIC_HEAP_COUNT
+    size_t metric = (size_t)-1;
+    if ((GCConfig::GetHeapCount() == 0) && (GCConfig::GetGCDynamicAdaptationMode() != 0))
+    {
+        // pack 5 numbers into one size_t
+        metric = permillage (dynamic_heap_count_data.median_percent_overhead          ) +
+                 permillage (dynamic_heap_count_data.overhead_reduction_per_step_up   ) * 1000 +
+                 permillage (dynamic_heap_count_data.overhead_increase_per_step_down  ) * 1000 * 1000 +
+                 permillage (dynamic_heap_count_data.space_cost_increase_per_step_up  ) * 1000 * 1000 * 1000 + 
+                 permillage (dynamic_heap_count_data.space_cost_decrease_per_step_down) * 1000 * 1000 * 1000 * 1000;
+    }
+#else //DYNAMIC_HEAP_COUNT
+    size_t metric = maxgen_size_info->pinned_allocated_advance;
+#endif //DYNAMIC_HEAP_COUNT
+
     FIRE_EVENT(GCPerHeapHistory_V3,
                (void *)(maxgen_size_info->free_list_allocated),
                (void *)(maxgen_size_info->free_list_rejected),
                (void *)(maxgen_size_info->end_seg_allocated),
                (void *)(maxgen_size_info->condemned_allocated),
                (void *)(maxgen_size_info->pinned_allocated),
-               (void *)(maxgen_size_info->pinned_allocated_advance),
+               (void *)(metric),
                maxgen_size_info->running_free_list_efficiency,
                current_gc_data_per_heap->gen_to_condemn_reasons.get_reasons0(),
                current_gc_data_per_heap->gen_to_condemn_reasons.get_reasons1(),
@@ -3191,6 +3218,17 @@ void gc_heap::fire_per_heap_hist_event (gc_history_per_heap* current_gc_data_per
 
     current_gc_data_per_heap->print();
     current_gc_data_per_heap->gen_to_condemn_reasons.print (heap_num);
+}
+
+int permillage (uint64_t part, uint64_t whole)
+{
+    if (whole == 0)
+        return 999;
+    double quotient = (double)part / (double)whole;
+    if (quotient >= 0.999)
+        return 999;
+    else
+        return (int)(quotient*1000);
 }
 
 void gc_heap::fire_pevents()
@@ -3218,12 +3256,33 @@ void gc_heap::fire_pevents()
     {
         time_info_32[i] = limit_time_to_uint32 (time_info[i]);
     }
+#ifdef DYNAMIC_HEAP_COUNT
+
+    int metric = -1;
+    if ((GCConfig::GetHeapCount() == 0) && (GCConfig::GetGCDynamicAdaptationMode() != 0))
+    {
+        uint32_t prev_sample_index = (dynamic_heap_count_data.sample_index + dynamic_heap_count_data_t::sample_size - 1) % dynamic_heap_count_data_t::sample_size;
+        assert (prev_sample_index < dynamic_heap_count_data_t::sample_size);
+        dynamic_heap_count_data_t::sample& sample = dynamic_heap_count_data.samples[prev_sample_index];
+
+        int gc_permillage  = permillage (sample.gc_elapsed_time  , sample.elapsed_between_gcs);
+        int soh_permillage = permillage (sample.soh_msl_wait_time, sample.elapsed_between_gcs);
+        int uoh_permillage = permillage (sample.uoh_msl_wait_time, sample.elapsed_between_gcs);
+
+        // pack the 3 numbers into one
+        metric = uoh_permillage * (1000*1000) +
+                 soh_permillage * (1000) +
+                 gc_permillage;
+    }
+#else //DYNAMIC_HEAP_COUNT
+    int metric = current_gc_data_global->gen0_reduction_count;
+#endif //DYNAMIC_HEAP_COUNT
 
     FIRE_EVENT(GCGlobalHeapHistory_V4,
                current_gc_data_global->final_youngest_desired,
                current_gc_data_global->num_heaps,
                current_gc_data_global->condemned_generation,
-               current_gc_data_global->gen0_reduction_count,
+               metric,
                current_gc_data_global->reason,
                current_gc_data_global->global_mechanisms_p,
                current_gc_data_global->pause_mode,
@@ -3258,6 +3317,144 @@ void gc_heap::fire_pevents()
     }
 #endif //FEATURE_LOH_COMPACTION
 #endif //FEATURE_EVENT_TRACE
+}
+
+// This fires the amount of total committed in use, in free and on the decommit list.
+// It's fired on entry and exit of each blocking GC and on entry of each BGC (not firing this on exit of a GC
+// because EE is not suspended then. On entry it's fired after the GCStart event, on exit it's fire before the GCStop event.
+void gc_heap::fire_committed_usage_events()
+{
+#if defined(FEATURE_EVENT_TRACE) && defined(USE_REGIONS)
+    if (!EVENT_ENABLED (GCMarkWithType)) return;
+
+    // We are temporarily repurposing the CreateSegment event which has 3 fields -
+    // Address -> high 32-bit: total committed in use (in kb), low 32-bit: total commmitted on the decommit list (in kb)
+    // Size -> high 32-bit: total committed in free (in kb), low 32-bit: total commmitted on the global huge free regions list (in kb)
+    // Type -> GC's own bookkeeping commit size. Note that this does not include the ones we allocate with new like mark list,
+    //         mark stack array and etc. These should be added.
+
+    // I copied this from refresh_memory_limit and changed slightly, should be refactored
+    size_t total_committed = 0;
+    size_t committed_free = 0;
+    size_t committed_decommit = 0;
+    size_t committed_free_huge_regions = 0;
+    size_t committed_bookkeeping = 0;
+
+    // Accounting for the bytes committed for the regions
+    for (int oh = soh; oh < total_oh_count; oh++)
+    {
+        int start_generation = (oh == 0) ? 0 : oh + max_generation;
+        int end_generation = oh + max_generation;
+        size_t total_committed_per_oh = 0;
+#ifdef MULTIPLE_HEAPS
+        for (int h = 0; h < n_heaps; h++)
+        {
+            gc_heap* heap = g_heaps[h];
+#else
+        {
+            gc_heap* heap = pGenGCHeap;
+#endif //MULTIPLE_HEAPS
+            size_t total_committed_per_heap = 0;
+            for (int gen = start_generation; gen <= end_generation; gen++)
+            {
+                heap->accumulate_committed_bytes (generation_start_segment (heap->generation_of (gen)), total_committed_per_heap, committed_bookkeeping);
+            }
+            if (oh == soh)
+            {
+                heap->accumulate_committed_bytes (heap->freeable_soh_segment, committed_free, committed_bookkeeping);
+            }
+            else
+            {
+                heap->accumulate_committed_bytes (heap->freeable_uoh_segment, committed_free, committed_bookkeeping, (gc_oh_num)oh);
+            }
+            total_committed_per_oh += total_committed_per_heap;
+        }
+        total_committed += total_committed_per_oh;
+    }
+
+#ifdef MULTIPLE_HEAPS
+    for (int h = 0; h < n_heaps; h++)
+    {
+        gc_heap* heap = g_heaps[h];
+#else
+    {
+        gc_heap* heap = pGenGCHeap;
+#endif //MULTIPLE_HEAPS
+        for (int i = 0; i < count_free_region_kinds; i++)
+        {
+            heap_segment* seg = heap->free_regions[i].get_first_free_region ();
+            heap->accumulate_committed_bytes (seg, committed_free, committed_bookkeeping);
+        }
+    }
+    for (int i = 0; i < count_free_region_kinds; i++)
+    {
+        heap_segment* seg = global_regions_to_decommit[i].get_first_free_region ();
+#ifdef MULTIPLE_HEAPS
+        gc_heap* heap = g_heaps[0];
+#else
+        gc_heap* heap = nullptr;
+#endif //MULTIPLE_HEAPS
+        heap->accumulate_committed_bytes (seg, committed_decommit, committed_bookkeeping);
+    }
+
+    {
+        heap_segment* seg = global_free_huge_regions.get_first_free_region ();
+#ifdef MULTIPLE_HEAPS
+        gc_heap* heap = g_heaps[0];
+#else
+        gc_heap* heap = pGenGCHeap;
+#endif //MULTIPLE_HEAPS
+        heap->accumulate_committed_bytes (seg, committed_free_huge_regions, committed_bookkeeping);
+    }
+
+    dprintf (9999, ("committed in use %Id, ma %Id", total_committed, committed_bookkeeping));
+    // Accounting for the bytes committed for the book keeping elements
+    uint8_t* commit_begins[total_bookkeeping_elements];
+    size_t commit_sizes[total_bookkeeping_elements];
+    size_t new_sizes[total_bookkeeping_elements];
+    bool get_card_table_commit_layout_result = get_card_table_commit_layout (g_gc_lowest_address, bookkeeping_covered_committed, commit_begins, commit_sizes, new_sizes);
+    assert (get_card_table_commit_layout_result);
+
+    size_t bookkeeping_without_mark_array = 0;
+
+    for (int i = card_table_element; i <= seg_mapping_table_element; i++)
+    {
+        // In case background GC is disabled - the software write watch table is still there
+        // but with size 0
+        assert (commit_sizes[i] >= 0);
+        bookkeeping_without_mark_array += commit_sizes[i];
+    }
+
+    committed_bookkeeping += bookkeeping_without_mark_array;
+    dprintf (9999, ("total bookkeeping %Id, no ma portion is %Id", committed_bookkeeping, bookkeeping_without_mark_array));
+
+    size_t total_committed_in_use = total_committed;
+    size_t total_committed_in_global_decommit = committed_decommit;
+    size_t total_committed_in_free = committed_free;
+    size_t total_committed_in_global_free = committed_free_huge_regions;
+    size_t total_bookkeeping_committed = committed_bookkeeping;
+
+    uint8_t* address = (uint8_t*)(((total_committed_in_use / 1000) << 32) + (total_committed_in_global_decommit / 1000));
+    size_t size = ((total_committed_in_free / 1000) << 32) + (total_committed_in_global_free / 1000);
+    uint32_t type = (uint32_t)(total_bookkeeping_committed / 1000);
+    FIRE_EVENT (GCCreateSegment_V1, address, size, type);
+
+    // TEMP, just for verification and serves as an example how to decode this event.
+    size_t total_committed_recorded_kb = total_committed_in_use / 1000 + total_committed_in_free / 1000;
+
+    size_t total_committed_in_use_recorded_kb = (size_t)address >> 32;
+    size_t total_committed_in_global_decommit_recorded_kb = (uint32_t)(size_t)address;
+    size_t total_committed_in_free_recorded_kb = size >> 32;
+    size_t total_committed_in_global_free_recorded_kb = (uint32_t)size;
+    size_t total_heap_size = get_total_heap_size();
+
+    dprintf (9999, ("GC committed %d kb total committed %Id(r: %Id/%Ix kb) (heap: %Id), in use %Id(r: %Id/%Ix kb), in free %Id(r: %Id/%Ix kb), in global decommit %Id(r: %Id/%Ix kb), in global free %Id(r: %Id/%Ix kb)",
+        type, total_committed_in_use, total_committed_recorded_kb, total_committed_recorded_kb,
+        total_heap_size, total_committed_in_use, total_committed_in_use_recorded_kb, total_committed_in_use_recorded_kb,
+        total_committed_in_free, total_committed_in_free_recorded_kb, total_committed_in_free_recorded_kb,
+        total_committed_in_global_decommit, total_committed_in_global_decommit_recorded_kb, total_committed_in_global_decommit_recorded_kb,
+        total_committed_in_global_free, total_committed_in_global_free_recorded_kb, total_committed_in_global_free_recorded_kb));
+#endif //FEATURE_EVENT_TRACE && USE_REGIONS
 }
 
 inline BOOL
@@ -4129,9 +4326,9 @@ bool region_allocator::allocate_region (int gen_num, size_t size, uint8_t** star
         segment_type = gc_etw_segment_small_object_heap;
     }
 
-    FIRE_EVENT(GCCreateSegment_V1, (alloc + sizeof (aligned_plug_and_gap)),
-                                  size - sizeof (aligned_plug_and_gap),
-                                  segment_type);
+    //FIRE_EVENT(GCCreateSegment_V1, (alloc + sizeof (aligned_plug_and_gap)),
+    //                              size - sizeof (aligned_plug_and_gap),
+    //                              segment_type);
 
     return ret;
 }
@@ -5906,9 +6103,9 @@ gc_heap::soh_get_segment_to_expand()
         }
 #endif //BACKGROUND_GC
 
-        FIRE_EVENT(GCCreateSegment_V1, heap_segment_mem(result),
-                                  (size_t)(heap_segment_reserved (result) - heap_segment_mem(result)),
-                                  gc_etw_segment_small_object_heap);
+        //FIRE_EVENT(GCCreateSegment_V1, heap_segment_mem(result),
+        //                          (size_t)(heap_segment_reserved (result) - heap_segment_mem(result)),
+        //                          gc_etw_segment_small_object_heap);
     }
 
     get_gc_data_per_heap()->set_mechanism (gc_heap_expand, (result ? expand_new_seg : expand_no_memory));
@@ -6103,12 +6300,12 @@ heap_segment* gc_heap::get_segment_for_uoh (int gen_number, size_t size
 #else //USE_REGIONS
         res->flags |= flags;
 
-        FIRE_EVENT(GCCreateSegment_V1,
-            heap_segment_mem(res),
-            (size_t)(heap_segment_reserved (res) - heap_segment_mem(res)),
-            (gen_number == poh_generation) ?
-                gc_etw_segment_pinned_object_heap :
-                gc_etw_segment_large_object_heap);
+        //FIRE_EVENT(GCCreateSegment_V1,
+        //    heap_segment_mem(res),
+        //    (size_t)(heap_segment_reserved (res) - heap_segment_mem(res)),
+        //    (gen_number == poh_generation) ?
+        //        gc_etw_segment_pinned_object_heap :
+        //        gc_etw_segment_large_object_heap);
 
 #ifdef MULTIPLE_HEAPS
         hp->thread_uoh_segment (gen_number, res);
@@ -6121,7 +6318,7 @@ heap_segment* gc_heap::get_segment_for_uoh (int gen_number, size_t size
                             heap_segment_mem (res),
                             heap_segment_allocated (res),
                             heap_segment_reserved (res)
-                        );
+                      );
     }
 
     return res;
@@ -9903,7 +10100,7 @@ BOOL gc_heap::insert_ro_segment (heap_segment* seg)
         set_ro_segment_in_range (seg);
     }
 
-    FIRE_EVENT(GCCreateSegment_V1, heap_segment_mem(seg), (size_t)(heap_segment_reserved (seg) - heap_segment_mem(seg)), gc_etw_segment_read_only_heap);
+    //FIRE_EVENT(GCCreateSegment_V1, heap_segment_mem(seg), (size_t)(heap_segment_reserved (seg) - heap_segment_mem(seg)), gc_etw_segment_read_only_heap);
 
     leave_spin_lock (&gc_heap::gc_lock);
     return TRUE;
@@ -14856,9 +15053,9 @@ gc_heap::init_gc_heap (int h_number)
     if (!seg)
         return 0;
 
-    FIRE_EVENT(GCCreateSegment_V1, heap_segment_mem(seg),
-                              (size_t)(heap_segment_reserved (seg) - heap_segment_mem(seg)),
-                              gc_etw_segment_small_object_heap);
+    //FIRE_EVENT(GCCreateSegment_V1, heap_segment_mem(seg),
+    //                          (size_t)(heap_segment_reserved (seg) - heap_segment_mem(seg)),
+    //                          gc_etw_segment_small_object_heap);
 
     seg_mapping_table_add_segment (seg, __this);
 #ifdef MULTIPLE_HEAPS
@@ -14885,9 +15082,9 @@ gc_heap::init_gc_heap (int h_number)
 
     lseg->flags |= heap_segment_flags_loh;
 
-    FIRE_EVENT(GCCreateSegment_V1, heap_segment_mem(lseg),
-                              (size_t)(heap_segment_reserved (lseg) - heap_segment_mem(lseg)),
-                              gc_etw_segment_large_object_heap);
+    //FIRE_EVENT(GCCreateSegment_V1, heap_segment_mem(lseg),
+    //                          (size_t)(heap_segment_reserved (lseg) - heap_segment_mem(lseg)),
+    //                          gc_etw_segment_large_object_heap);
 
     heap_segment* pseg = make_initial_segment (poh_generation, h_number, __this);
     if (!pseg)
@@ -14895,9 +15092,9 @@ gc_heap::init_gc_heap (int h_number)
 
     pseg->flags |= heap_segment_flags_poh;
 
-    FIRE_EVENT(GCCreateSegment_V1, heap_segment_mem(pseg),
-                              (size_t)(heap_segment_reserved (pseg) - heap_segment_mem(pseg)),
-                              gc_etw_segment_pinned_object_heap);
+    //FIRE_EVENT(GCCreateSegment_V1, heap_segment_mem(pseg),
+    //                          (size_t)(heap_segment_reserved (pseg) - heap_segment_mem(pseg)),
+    //                          gc_etw_segment_pinned_object_heap);
 
     seg_mapping_table_add_segment (lseg, __this);
     seg_mapping_table_add_segment (pseg, __this);
@@ -20857,9 +21054,7 @@ size_t gc_heap::get_total_allocated_since_last_gc()
     {
         gc_heap* hp = pGenGCHeap;
 #endif //MULTIPLE_HEAPS
-        // TEMP, only count UOH allocs
-        //total_allocated_size += hp->allocated_since_last_gc[0] + hp->allocated_since_last_gc[1];
-        total_allocated_size += hp->allocated_since_last_gc[1];
+        total_allocated_size += hp->allocated_since_last_gc[0] + hp->allocated_since_last_gc[1];
         hp->allocated_since_last_gc[0] = 0;
         hp->allocated_since_last_gc[1] = 0;
     }
@@ -49400,6 +49595,8 @@ void gc_heap::do_pre_gc()
 #endif //TRACE_GC
 
     GCHeap::UpdatePreGCCounters();
+    fire_committed_usage_events();
+
 #if defined(__linux__)
     GCToEEInterface::UpdateGCEventStatus(static_cast<int>(GCEventStatus::GetEnabledLevel(GCEventProvider_Default)),
                                          static_cast<int>(GCEventStatus::GetEnabledKeywords(GCEventProvider_Default)),
@@ -49928,6 +50125,10 @@ void gc_heap::do_post_gc()
         }
     }
 
+    if (!settings.concurrent)
+    {
+        fire_committed_usage_events ();
+    }
     GCHeap::UpdatePostGCCounters();
 
     // We need to reinitialize the number of pinned objects because it's used in the GCHeapStats
