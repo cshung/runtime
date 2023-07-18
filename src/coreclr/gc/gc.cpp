@@ -3438,6 +3438,13 @@ void gc_heap::fire_committed_usage_events()
     size_t size = ((total_committed_in_free / 1000) << 32) + (total_committed_in_global_free / 1000);
     uint32_t type = (uint32_t)(total_bookkeeping_committed / 1000);
     FIRE_EVENT (GCCreateSegment_V1, address, size, type);
+    GCEventFireCommittedUsage (
+        (uint64_t)total_committed_in_use,
+        (uint64_t)total_committed_in_global_decommit,
+        (uint64_t)total_committed_in_free,
+        (uint64_t)total_committed_in_global_free,
+        (uint64_t)total_bookkeeping_committed
+    );
 
     // TEMP, just for verification and serves as an example how to decode this event.
     size_t total_committed_recorded_kb = total_committed_in_use / 1000 + total_committed_in_free / 1000;

@@ -12,6 +12,7 @@ namespace CoreLab
         private static void Main()
         {
             Console.WriteLine("Andrew wins");
+            GC.Collect();
         }
     }
 }

@@ -96,6 +96,24 @@ struct EventSerializationTraits<uint32_t>
         return sizeof(uint32_t);
     }
 };
+template<>
+struct EventSerializationTraits<uint64_t>
+{
+    static void Serialize(const uint64_t& value, uint8_t** buffer)
+    {
+#if defined(BIGENDIAN)
+        **((uint32_t**)buffer) = ByteSwap64(value);
+#else
+        **((uint64_t**)buffer) = value;
+#endif // BIGENDIAN
+        *buffer += sizeof(uint64_t);
+    }
+
+    static size_t SerializedSize(const uint64_t& value)
+    {
+        return sizeof(uint64_t);
+    }
+};
 
 /*
  * Helper routines for serializing lists of arguments.
