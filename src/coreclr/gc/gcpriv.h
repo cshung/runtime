@@ -138,7 +138,7 @@ inline void FATAL_GC_ERROR()
 // This means any empty regions can be freely used for any generation. For
 // Server GC we will balance regions between heaps.
 // For now disable regions for StandAlone GC, NativeAOT and MacOS builds
-#if defined (HOST_64BIT) && !defined (BUILD_AS_STANDALONE) && !defined(__APPLE__)
+#if defined (HOST_64BIT) && defined (BUILD_AS_STANDALONE) && !defined(__APPLE__)
 #define USE_REGIONS
 #endif //HOST_64BIT && BUILD_AS_STANDALONE
 
@@ -4607,6 +4607,10 @@ public:
     PER_HEAP_ISOLATED_METHOD uint32_t wait_for_gc_done(int32_t timeOut = INFINITE);
 
     PER_HEAP_ISOLATED_METHOD int refresh_memory_limit();
+#ifdef USE_REGIONS
+    // TODO, AndrewAu, better place
+    PER_HEAP_ISOLATED_METHOD void compute_committed_bytes(size_t& total_committed, size_t& committed_decommit, size_t& committed_free, size_t& committed_bookkeeping, size_t& new_current_total_committed, size_t& new_current_total_committed_bookkeeping, size_t* new_committed_by_oh);
+#endif
 
     /***************************************************************************************************/
     // public fields                                                                                   //

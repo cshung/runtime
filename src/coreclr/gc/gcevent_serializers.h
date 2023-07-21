@@ -115,6 +115,22 @@ struct EventSerializationTraits<uint64_t>
     }
 };
 
+template<>
+struct EventSerializationTraits<float>
+{
+    static void Serialize(const float& value, uint8_t** buffer)
+    {
+        // TODO, AndrewAu, I think we can assume IEEE754?
+        **((float**)buffer) = value;
+        *buffer += sizeof(float);
+    }
+
+    static size_t SerializedSize(const float& value)
+    {
+        return sizeof(float);
+    }
+};
+
 /*
  * Helper routines for serializing lists of arguments.
  */

@@ -3191,7 +3191,7 @@ void gc_heap::fire_per_heap_hist_event (gc_history_per_heap* current_gc_data_per
         metric = permillage (dynamic_heap_count_data.median_percent_overhead          ) +
                  permillage (dynamic_heap_count_data.overhead_reduction_per_step_up   ) * 1000 +
                  permillage (dynamic_heap_count_data.overhead_increase_per_step_down  ) * 1000 * 1000 +
-                 permillage (dynamic_heap_count_data.space_cost_increase_per_step_up  ) * 1000 * 1000 * 1000 + 
+                 permillage (dynamic_heap_count_data.space_cost_increase_per_step_up  ) * 1000 * 1000 * 1000 +
                  permillage (dynamic_heap_count_data.space_cost_decrease_per_step_down) * 1000 * 1000 * 1000 * 1000;
     }
 #else //DYNAMIC_HEAP_COUNT
@@ -3445,6 +3445,30 @@ void gc_heap::fire_committed_usage_events()
         (uint64_t)total_committed_in_global_free,
         (uint64_t)total_bookkeeping_committed
     );
+
+    {
+        // TODO, AndrewAu, naming conventions - these will be gone once I remove all the copied code.
+        size_t my_total_committed = 0;
+        size_t my_committed_decommit = 0;
+        size_t my_committed_free = 0;
+        size_t my_committed_bookkeeping = 0;
+        size_t my_new_current_total_committed;
+        size_t my_new_current_total_committed_bookkeeping;
+        size_t my_new_committed_by_oh[recorded_committed_bucket_counts];
+        compute_committed_bytes(my_total_committed, my_committed_decommit, my_committed_free, my_committed_bookkeeping, my_new_current_total_committed, my_new_current_total_committed_bookkeeping, my_new_committed_by_oh);
+
+        size_t your_total_committed_in_use = my_new_committed_by_oh[soh] + my_new_committed_by_oh[loh] + my_new_committed_by_oh[poh];
+        size_t your_total_committed_in_global_decommit = my_committed_decommit;
+        size_t your_total_committed_in_free = my_committed_free;
+        size_t your_total_committed_in_global_free = my_new_committed_by_oh[recorded_committed_free_bucket] - your_total_committed_in_free - your_total_committed_in_global_decommit;
+        size_t your_total_bookkeeping_committed = committed_bookkeeping;
+
+        assert(your_total_committed_in_use == total_committed_in_use);
+        assert(your_total_committed_in_global_decommit == total_committed_in_global_decommit);
+        assert(your_total_committed_in_free == total_committed_in_free);
+        assert(your_total_committed_in_global_free == total_committed_in_global_free);
+        assert(your_total_bookkeeping_committed == total_bookkeeping_committed);
+    }
 
     // TEMP, just for verification and serves as an example how to decode this event.
     size_t total_committed_recorded_kb = total_committed_in_use / 1000 + total_committed_in_free / 1000;
@@ -25371,6 +25395,14 @@ void gc_heap::check_heap_count ()
         dynamic_heap_count_data.overhead_increase_per_step_down   = overhead_increase_per_step_down;
         dynamic_heap_count_data.space_cost_increase_per_step_up   = space_cost_increase_per_step_up;
         dynamic_heap_count_data.space_cost_decrease_per_step_down = space_cost_decrease_per_step_down;
+
+        GCEventFireDynamicHeapCountData(
+            dynamic_heap_count_data.median_percent_overhead,
+            dynamic_heap_count_data.overhead_reduction_per_step_up,
+            dynamic_heap_count_data.overhead_increase_per_step_down,
+            dynamic_heap_count_data.space_cost_increase_per_step_up,
+            dynamic_heap_count_data.space_cost_decrease_per_step_down
+        );
 
         if (new_n_heaps != n_heaps)
         {
@@ -52410,25 +52442,9 @@ bool gc_heap::compute_memory_settings(bool is_initialization, uint32_t& nhp, uin
     return true;
 }
 
-int gc_heap::refresh_memory_limit()
-{
-    refresh_memory_limit_status status = refresh_success;
-
-    if (GCConfig::GetGCTotalPhysicalMemory() != 0)
-    {
-        return (int)status;
-    }
-
-    GCToEEInterface::SuspendEE(SUSPEND_FOR_GC);
-
 #ifdef USE_REGIONS
-    decommit_lock.Enter();
-    size_t total_committed = 0;
-    size_t committed_bookkeeping = 0;
-    size_t new_current_total_committed;
-    size_t new_current_total_committed_bookkeeping;
-    size_t new_committed_by_oh[recorded_committed_bucket_counts];
-
+void gc_heap::compute_committed_bytes(size_t& total_committed, size_t& committed_decommit, size_t& committed_free, size_t& committed_bookkeeping, size_t& new_current_total_committed, size_t& new_current_total_committed_bookkeeping, size_t* new_committed_by_oh)
+{
     // Accounting for the bytes committed for the regions
     for (int oh = soh; oh < total_oh_count; oh++)
     {
@@ -52466,7 +52482,8 @@ int gc_heap::refresh_memory_limit()
     }
 
     // Accounting for the bytes committed for the free lists
-    size_t committed_free = 0;
+    size_t committed_old_free = 0;
+    committed_free = 0;
 #ifdef MULTIPLE_HEAPS
     for (int h = 0; h < n_heaps; h++)
     {
@@ -52481,6 +52498,8 @@ int gc_heap::refresh_memory_limit()
             heap->accumulate_committed_bytes (seg, committed_free, committed_bookkeeping);
         }
     }
+    committed_old_free += committed_free;
+    committed_decommit = 0;
     for (int i = 0; i < count_free_region_kinds; i++)
     {
         heap_segment* seg = global_regions_to_decommit[i].get_first_free_region();
@@ -52489,8 +52508,9 @@ int gc_heap::refresh_memory_limit()
 #else
         gc_heap* heap = nullptr;
 #endif //MULTIPLE_HEAPS
-        heap->accumulate_committed_bytes (seg, committed_free, committed_bookkeeping);
+        heap->accumulate_committed_bytes (seg, committed_decommit, committed_bookkeeping);
     }
+    committed_old_free += committed_decommit;
     {
         heap_segment* seg = global_free_huge_regions.get_first_free_region();
 #ifdef MULTIPLE_HEAPS
@@ -52498,11 +52518,11 @@ int gc_heap::refresh_memory_limit()
 #else
         gc_heap* heap = pGenGCHeap;
 #endif //MULTIPLE_HEAPS
-        heap->accumulate_committed_bytes (seg, committed_free, committed_bookkeeping);
+        heap->accumulate_committed_bytes (seg, committed_old_free, committed_bookkeeping);
     }
 
-    new_committed_by_oh[recorded_committed_free_bucket] = committed_free;
-    total_committed += committed_free;
+    new_committed_by_oh[recorded_committed_free_bucket] = committed_old_free;
+    total_committed += committed_old_free;
 
     // Accounting for the bytes committed for the book keeping elements
     uint8_t* commit_begins[total_bookkeeping_elements];
@@ -52523,6 +52543,30 @@ int gc_heap::refresh_memory_limit()
     new_committed_by_oh[recorded_committed_bookkeeping_bucket] = committed_bookkeeping;
     total_committed += committed_bookkeeping;
     new_current_total_committed = total_committed;
+}
+#endif //USE_REGIONS
+
+int gc_heap::refresh_memory_limit()
+{
+    refresh_memory_limit_status status = refresh_success;
+
+    if (GCConfig::GetGCTotalPhysicalMemory() != 0)
+    {
+        return (int)status;
+    }
+
+    GCToEEInterface::SuspendEE(SUSPEND_FOR_GC);
+
+#ifdef USE_REGIONS
+    decommit_lock.Enter();
+    size_t total_committed = 0;
+    size_t committed_decommit; // unused
+    size_t committed_free; // unused
+    size_t committed_bookkeeping = 0;
+    size_t new_current_total_committed;
+    size_t new_current_total_committed_bookkeeping;
+    size_t new_committed_by_oh[recorded_committed_bucket_counts];
+    compute_committed_bytes(total_committed, committed_decommit, committed_free, committed_bookkeeping, new_current_total_committed, new_current_total_committed_bookkeeping, new_committed_by_oh);
 #endif //USE_REGIONS
 
     uint32_t nhp_from_config = static_cast<uint32_t>(GCConfig::GetHeapCount());
