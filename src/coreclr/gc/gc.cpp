@@ -3273,6 +3273,28 @@ void gc_heap::fire_pevents()
         metric = uoh_permillage * (1000*1000) +
                  soh_permillage * (1000) +
                  gc_permillage;
+
+        uint64_t gc_elapsed_time     = sample.gc_elapsed_time;
+        uint64_t soh_msl_wait_time   = sample.soh_msl_wait_time;
+        uint64_t uoh_msl_wait_time   = sample.uoh_msl_wait_time;
+        uint64_t elapsed_between_gcs = sample.elapsed_between_gcs;
+
+        // TODO, AndrewAu, is this the right time to fire these events?
+        //
+        // I get it, we need to reuse the existing GCGlobalHeapHistory_V4 event, so we had no choice
+        // but to fire it now, but now we have an option to do something different.
+        //
+        // GCEventFireDynamicHeapCountData is also computed once across all heaps - so this is not
+        // more global than that one
+        //
+        // Right now, this is fired more frequently than GCEventFireDynamicHeapCountData
+        // 
+        GCEventFireGlobalDynamicHeapCountData(
+            gc_elapsed_time,
+            soh_msl_wait_time,
+            uoh_msl_wait_time,
+            elapsed_between_gcs
+        );
     }
 #else //DYNAMIC_HEAP_COUNT
     int metric = current_gc_data_global->gen0_reduction_count;

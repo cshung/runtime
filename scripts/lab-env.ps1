@@ -52,4 +52,5 @@ if ($trace -eq "1")
 if ($server -eq "1")
 {
     $env:COMPlus_gcServer="1"
+    $env:COMPlus_GCDynamicAdaptationMode="1"
 }

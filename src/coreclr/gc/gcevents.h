@@ -52,6 +52,7 @@ KNOWN_EVENT(PinPlugAtGCTime, GCEventProvider_Private, GCEventLevel_Verbose, GCEv
 // TODO, AndrewAu, level
 DYNAMIC_EVENT(CommittedUsage, GCEventLevel_Information, GCEventKeyword_GC)
 DYNAMIC_EVENT(DynamicHeapCountData, GCEventLevel_Verbose, GCEventKeyword_GC)
+DYNAMIC_EVENT(GlobalDynamicHeapCountData, GCEventLevel_Verbose, GCEventKeyword_GC)
 
 #undef KNOWN_EVENT
 #undef DYNAMIC_EVENT
