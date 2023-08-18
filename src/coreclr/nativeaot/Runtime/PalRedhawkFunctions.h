@@ -77,12 +77,6 @@ inline uint32_t PalGetEnvironmentVariable(_In_opt_ LPCSTR lpName, _Out_writes_to
 }
 #endif
 
-extern "C" void * __stdcall GetProcAddress(HANDLE, const char *);
-inline void * PalGetProcAddress(HANDLE arg1, const char * arg2)
-{
-    return GetProcAddress(arg1, arg2);
-}
-
 extern "C" UInt32_BOOL __stdcall InitializeCriticalSectionEx(CRITICAL_SECTION *, uint32_t, uint32_t);
 inline UInt32_BOOL PalInitializeCriticalSectionEx(CRITICAL_SECTION * arg1, uint32_t arg2, uint32_t arg3)
 {
@@ -99,12 +93,6 @@ extern "C" void __stdcall LeaveCriticalSection(CRITICAL_SECTION *);
 inline void PalLeaveCriticalSection(CRITICAL_SECTION * arg1)
 {
     LeaveCriticalSection(arg1);
-}
-
-extern "C" HANDLE __stdcall LoadLibraryExW(const WCHAR *, HANDLE, uint32_t);
-inline HANDLE PalLoadLibraryExW(const WCHAR * arg1, HANDLE arg2, uint32_t arg3)
-{
-    return LoadLibraryExW(arg1, arg2, arg3);
 }
 
 extern "C" void __stdcall RaiseException(uint32_t, uint32_t, uint32_t, const uint32_t *);

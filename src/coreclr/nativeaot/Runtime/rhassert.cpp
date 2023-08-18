@@ -68,7 +68,7 @@ void Assert(const char * expr, const char * file, uint32_t line_num, const char 
            message ? ("\n\n") : (""),
            expr, file, line_num);
 
-    HANDLE hMod = PalLoadLibraryExW(L"user32.dll", NULL, 0);
+    HANDLE hMod = PalLoadLibrary("user32.dll");
     int32_t (* pfn)(HANDLE, char *, const char *, uint32_t) =
         (int32_t (*)(HANDLE, char *, const char *, uint32_t))PalGetProcAddress(hMod, "MessageBoxA");
 
