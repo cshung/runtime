@@ -147,8 +147,10 @@ inline void FATAL_GC_ERROR()
 // This means any empty regions can be freely used for any generation. For
 // Server GC we will balance regions between heaps.
 // For now disable regions for StandAlone GC, NativeAOT and MacOS builds
-#if defined (HOST_64BIT) && !defined (BUILD_AS_STANDALONE) && !defined(__APPLE__)
+#if defined (HOST_64BIT) && defined (BUILD_AS_STANDALONE) && !defined(__APPLE__)
+#ifndef USE_REGIONS
 #define USE_REGIONS
+#endif
 #endif //HOST_64BIT && BUILD_AS_STANDALONE
 
 //#define SPINLOCK_HISTORY
@@ -5397,6 +5399,7 @@ private:
     }
 
 public:
+    void split_region (uint8_t* region_start, uint8_t* region_end, size_t size, int* count, uint8_t* start[LARGE_REGION_FACTOR + 1], uint8_t* end[LARGE_REGION_FACTOR + 1]);
     bool init (uint8_t* start, uint8_t* end, size_t alignment, uint8_t** lowest, uint8_t** highest);
     bool allocate_region (int gen_num, size_t size, uint8_t** start, uint8_t** end, allocate_direction direction, region_allocator_callback_fn fn);
     bool allocate_basic_region (int gen_num, uint8_t** start, uint8_t** end, region_allocator_callback_fn fn);

@@ -1,3 +1,28 @@
+# Andrew Notes
+This branch is intended to implement the idea of splitting larger free regions to satisfy smaller requests.
+
+Here are a few things to do:
+- Make sure the split happens only when we are in the last chance mode
+- Debug why descr_generation discover a generation without an allocation segment in the repro
+
+```
+set dotnet_GCHeapCount=2
+set dotnet_GCHeapHardLimit=2EE00000
+set dotnet_GCName=..\..\..\..\..\..\..\..\..\..\..\..\..\..\..\..\Dev\runtime\artifacts\bin\coreclr\windows.x64.Debug\clrgc.dll
+set dotnet_GCServer=0
+set dotnet_LogLevel=9
+set dotnet_StressLog=1
+set dotnet_StressLogFilename=D:\CoreLab.{pid}.log
+set dotnet_StressLogSize=10000000
+set dotnet_TotalStressLogSize=20
+set ASPNETCORE_URLS=http://localhost:5055
+
+https://dev.azure.com/devdiv/DevDiv/_workitems/edit/1876023#
+curl -sw "%{http_code} " http://localhost:5055/?size=[0-100]
+
+c:\toolssw\debuggers\amd64\windbg.exe C:\Users\andrewau\Downloads\OutOfMemoryWebApp\OutOfMemoryWebApp\OutOfMemoryWebApp\bin\Debug\net7.0\win-x64\publish\OutOfMemoryWebApp.exe
+```
+
 # .NET Runtime
 
 [![Build Status](https://dev.azure.com/dnceng-public/public/_apis/build/status/dotnet/runtime/runtime?branchName=main)](https://dev.azure.com/dnceng-public/public/_build/latest?definitionId=129&branchName=main)

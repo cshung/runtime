@@ -11,7 +11,13 @@ namespace CoreLab
     {
         private static void Main()
         {
-            Console.WriteLine("Andrew wins");
+            int size = 9000;
+            for (int i = 0; i < 10000; i++)
+            {
+                int[] whatever = new int[size];
+                whatever[0] = 1;
+                whatever[size-1] = 1;
+            }
         }
     }
 }

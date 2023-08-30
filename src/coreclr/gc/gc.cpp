@@ -18,6 +18,9 @@
 
 #include "gcpriv.h"
 
+// TODO, andrewau, revert this hack
+// #define ANDREW_HACK
+
 #if defined(TARGET_AMD64) && defined(TARGET_WINDOWS)
 #define USE_VXSORT
 #else
@@ -3838,6 +3841,47 @@ size_t get_region_committed_size (heap_segment* region)
 inline bool is_free_region (heap_segment* region)
 {
     return (heap_segment_allocated (region) == nullptr);
+}
+
+void region_allocator::split_region (uint8_t* region_start, uint8_t* region_end, size_t size, int* count, uint8_t* start[LARGE_REGION_FACTOR + 1], uint8_t* end[LARGE_REGION_FACTOR + 1])
+{
+    enter_spin_lock();
+    size_t large_region_alignment = get_large_region_alignment();
+    size_t original_region_size  = region_end - region_start;
+    assert ((original_region_size % large_region_alignment) == 0);
+    assert (original_region_size > size);
+    uint32_t region_size_in_unit = (uint32_t)(original_region_size / region_alignment);
+
+    if (size == region_alignment)
+    {
+        uint32_t* head_index = region_map_index_of(region_start);
+        for (int i = 0; i < LARGE_REGION_FACTOR; i++)
+        {
+            make_busy_block(head_index + i, 1);
+            start[i] = (i == 0) ? region_start : end[i - 1];
+            end[i] = start[i] + region_alignment;
+        }
+        *count = LARGE_REGION_FACTOR;
+        if (region_size_in_unit > LARGE_REGION_FACTOR)
+        {
+            make_busy_block(head_index + LARGE_REGION_FACTOR, region_size_in_unit - LARGE_REGION_FACTOR);
+            start[LARGE_REGION_FACTOR] = end[LARGE_REGION_FACTOR - 1];
+            end[LARGE_REGION_FACTOR] = region_end;
+            *count++;
+        }
+    }
+    else
+    {
+        uint32_t* head_index = region_map_index_of(region_start);
+        uint32_t* tail_index = head_index + LARGE_REGION_FACTOR;
+        make_busy_block(head_index, LARGE_REGION_FACTOR);
+        make_busy_block(tail_index, region_size_in_unit - LARGE_REGION_FACTOR);
+        *count = 2;
+        start[0] = region_start;
+        end[0] = start[1] = region_start + get_large_region_alignment();
+        end[1] = region_end;
+    }
+    leave_spin_lock();
 }
 
 bool region_allocator::init (uint8_t* start, uint8_t* end, size_t alignment, uint8_t** lowest, uint8_t** highest)
@@ -7993,7 +8037,14 @@ bool gc_heap::new_allocation_allowed (int gen_number)
                 }
             }
         }
+
+#ifdef ANDREW_HACK
+        // This is just a hack to force the allocation code path to try reuse big
+        // free regions
+        return TRUE;
+#else
         return FALSE;
+#endif
     }
 #ifndef MULTIPLE_HEAPS
     else if ((settings.pause_mode != pause_no_gc) && (gen_number == 0))
@@ -11755,48 +11806,53 @@ void gc_heap::return_free_region (heap_segment* region)
     }
 }
 
-// USE_REGIONS TODO: SOH should be able to get a large region and split it up into basic regions
-// if needed.
+// USE_REGIONS TODO: Consider stealing from global decommit list, if we have regions there.
 // USE_REGIONS TODO: In Server GC we should allow to get a free region from another heap.
 heap_segment* gc_heap::get_free_region (int gen_number, size_t size)
 {
+    // TODO, andrewau, derive the value of this flag from the allocator
+    bool consider_splitting_p = true;
     heap_segment* region = 0;
 
-    if (gen_number <= max_generation)
+    const size_t BASIC_REGION_SIZE = global_region_allocator.get_region_alignment();
+    const size_t LARGE_REGION_SIZE = global_region_allocator.get_large_region_alignment();
+
+    bool soh_p = gen_number <= max_generation;
+    bool large_region_p = (size == LARGE_REGION_SIZE);
+    assert (!soh_p || size == 0);
+    assert (soh_p || (size >= LARGE_REGION_SIZE) && (size % LARGE_REGION_SIZE == 0));
+
+    if (soh_p)
     {
-        assert (size == 0);
+        // get it from the local list of basic free regions if possible
         region = free_regions[basic_free_region].unlink_region_front();
     }
-    else
+    if (((region == nullptr) && (soh_p) && (consider_splitting_p)) || large_region_p)
     {
-        const size_t LARGE_REGION_SIZE = global_region_allocator.get_large_region_alignment();
+        // get it from the local list of large free regions if possible
+        region = free_regions[large_free_region].unlink_region_front();
+    }
+    if ((consider_splitting_p && (region == nullptr))|| (size > LARGE_REGION_SIZE))
+    {
+        // get it from the local list of huge free regions if possible
+        region = free_regions[huge_free_region].unlink_smallest_region (size);
 
-        assert (size >= LARGE_REGION_SIZE);
-        if (size == LARGE_REGION_SIZE)
+        // TODO, andrewau, consider taking gc_lock here in case of soh allocations.
+        if ((region == nullptr) && !soh_p)
         {
-            // get it from the local list of large free regions if possible
-            region = free_regions[large_free_region].unlink_region_front();
-        }
-        else
-        {
-            // get it from the local list of huge free regions if possible
-            region = free_regions[huge_free_region].unlink_smallest_region (size);
-            if (region == nullptr)
+            if (settings.pause_mode == pause_no_gc)
             {
-                if (settings.pause_mode == pause_no_gc)
-                {
-                    // In case of no-gc-region, the gc lock is being held by the thread
-                    // triggering the GC.
-                    assert (gc_lock.holding_thread != (Thread*)-1);
-                }
-                else
-                {
-                    ASSERT_HOLDING_SPIN_LOCK(&gc_lock);
-                }
-
-                // get it from the global list of huge free regions
-                region = global_free_huge_regions.unlink_smallest_region (size);
+                // In case of no-gc-region, the gc lock is being held by the thread
+                // triggering the GC.
+                assert (gc_lock.holding_thread != (Thread*)-1);
             }
+            else
+            {
+                ASSERT_HOLDING_SPIN_LOCK(&gc_lock);
+            }
+
+            // get it from the global list of huge free regions
+            region = global_free_huge_regions.unlink_smallest_region (size);
         }
     }
 
@@ -11804,6 +11860,57 @@ heap_segment* gc_heap::get_free_region (int gen_number, size_t size)
     {
         uint8_t* region_start = get_region_start (region);
         uint8_t* region_end = heap_segment_reserved (region);
+
+
+        if (soh_p)
+        {
+            // TODO, andrewau, this is annoying, but we can't change it above because otherwise the call to
+            // allocate_new_region in the other branch will assert
+            size = BASIC_REGION_SIZE;
+        }
+
+        // Note that this may apply in the case that we have a larger than necessary huge region
+        // even when consider_splitting_p is false.
+        if (((size_t)(region_end - region_start)) > size)
+        {
+            bool mark_array_committed = (region->flags & heap_segment_flags_ma_committed) == heap_segment_flags_ma_committed;
+            uint8_t* committed = heap_segment_committed (region);
+            uint8_t* used = heap_segment_used (region);
+
+            int count = 0;
+            uint8_t* start[LARGE_REGION_FACTOR + 1];
+            uint8_t* end[LARGE_REGION_FACTOR + 1];
+            global_region_allocator.split_region (region_start, region_end, size, &count, start, end);
+
+            for (int i = 0; i < count; i++)
+            {
+                // The fact that we only care about these four fields is because we are trying
+                // to mimic make_heap_segment without the commit and without the chaining init_heap_segment call
+                uint8_t* new_pages = start[i];
+                uint8_t* new_pages_end = end[i];
+                heap_segment* new_segment = get_region_info (new_pages);
+                uint8_t* start = new_pages + sizeof (aligned_plug_and_gap);
+                heap_segment_mem (new_segment) = start;
+                heap_segment_used (new_segment) = max (new_pages, min(used, new_pages_end));
+                heap_segment_reserved (new_segment) = new_pages_end;
+                heap_segment_committed (new_segment) = max (new_pages, min(committed, new_pages_end));
+
+                // Make sure we preserve the fact that the mark array is (or is not) committed
+                new_segment->flags = mark_array_committed ? heap_segment_flags_ma_committed : 0;
+
+                if (i == 0)
+                {
+                    region_end = new_pages_end;
+                }
+                else
+                {
+                    init_heap_segment(new_segment, __this, new_pages, new_pages_end - new_pages, gen_number, true);
+                    // TODO, andrewau, this might miss some logic in return_free_region
+                    region_free_list::add_region_descending(new_segment, free_regions);
+                }
+            }
+        }
+
         init_heap_segment (region, __this, region_start,
                            (region_end - region_start),
                            gen_number, true);
@@ -12629,7 +12736,6 @@ void region_free_list::verify (bool empty_p)
 #ifdef _DEBUG
     assert ((num_free_regions == 0) == empty_p);
     assert ((size_free_regions == 0) == empty_p);
-    assert ((size_committed_in_free_regions == 0) == empty_p);
     assert ((head_free_region == nullptr) == empty_p);
     assert ((tail_free_region == nullptr) == empty_p);
     assert (num_free_regions == (num_free_regions_added - num_free_regions_removed));
@@ -14905,6 +15011,22 @@ gc_heap::init_gc_heap (int h_number)
     {
         return 0;
     }
+
+#ifdef ANDREW_HACK
+    {
+        // This hack create a huge free region of 64MB and put it in the huge free region list
+        // This allow us to experiment with the split region logic without figuring how
+        // to reach that state
+        enter_spin_lock (&gc_lock);
+        heap_segment* region = get_new_region (3, 64 * 1024 * 1024);
+        leave_spin_lock (&gc_lock);
+        // Manually unthread the region from the generation
+        generation_table[3].start_segment->next = nullptr;
+        generation_table[3].tail_region = generation_table[3].start_segment;
+        // So that it can end up in the free list
+        region_free_list::add_region_descending (region, free_regions);
+    }
+#endif
 
 #else //USE_REGIONS
 
@@ -32731,6 +32853,12 @@ void gc_heap::plan_phase (int condemned_gen_number)
     plan_generation_starts (consing_gen);
 #endif //!USE_REGIONS
 
+    // TODO, andrewau, this is crashing if logging is tured on.
+    // It appears that it is possible that the generation_allocation_segment of gen 0
+    // be set to null in the earlier call to process_remaining_region
+    // and then got accessed in the logging inside descr_generation
+    // but turn out it could be just fine since fix_generation_bounds will fix it
+    // after compacting 
     descr_generations ("AP");
 
     print_free_and_plug ("AP");
