@@ -197,6 +197,7 @@ inline OBJECTHANDLE CreateGlobalRefcountedHandle(OBJECTREF object)
     return CreateGlobalHandleCommon(object, HNDTYPE_REFCOUNTED);
 }
 
+#ifdef FEATURE_VARIABLE_HANDLES
 // Creates a variable-strength handle
 inline OBJECTHANDLE CreateVariableHandle(IGCHandleStore* store, OBJECTREF object, uint32_t type)
 {
@@ -209,6 +210,7 @@ inline OBJECTHANDLE CreateVariableHandle(IGCHandleStore* store, OBJECTREF object
     DiagHandleCreated(hnd, object);
     return hnd;
 }
+#endif //FEATURE_VARIABLE_HANDLES
 
 // Handle object manipulation convenience functions
 
@@ -299,10 +301,12 @@ inline void DestroyDependentHandle(OBJECTHANDLE handle)
     DestroyHandleCommon(handle, HNDTYPE_DEPENDENT);
 }
 
+#ifdef FEATURE_VARIABLE_HANDLES
 inline void  DestroyVariableHandle(OBJECTHANDLE handle)
 {
     DestroyHandleCommon(handle, HNDTYPE_VARIABLE);
 }
+#endif //FEATURE_VARIABLE_HANDLES
 
 inline void DestroyGlobalHandle(OBJECTHANDLE handle)
 {

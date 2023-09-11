@@ -426,6 +426,7 @@ typedef enum
      */
     HNDTYPE_PINNED       = 3,
 
+#ifdef FEATURE_VARIABLE_HANDLES
     /*
      * VARIABLE HANDLES
      *
@@ -437,6 +438,7 @@ typedef enum
      * NOTE: HNDTYPE_VARIABLE is not used currently.
      */
     HNDTYPE_VARIABLE     = 4,
+#endif //FEATURE_VARIABLE_HANDLES
 
     /*
      * REFCOUNTED HANDLES

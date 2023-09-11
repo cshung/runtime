@@ -40,7 +40,7 @@ struct HandleTableBucket
     bool Contains(OBJECTHANDLE handle);
 };
 
-
+#ifdef FEATURE_VARIABLE_HANDLES
 /*
  * Type mask definitions for HNDTYPE_VARIABLE handles.
  */
@@ -53,6 +53,7 @@ struct HandleTableBucket
                                     ((flag) == VHT_WEAK_LONG)  || \
                                     ((flag) == VHT_STRONG)     || \
                                     ((flag) == VHT_PINNED))
+#endif //FEATURE_VARIABLE_HANDLES
 
 GC_DAC_VISIBLE
 OBJECTREF GetDependentHandleSecondary(OBJECTHANDLE handle);
@@ -62,9 +63,11 @@ void SetDependentHandleSecondary(OBJECTHANDLE handle, OBJECTREF secondary);
 #endif // !DACCESS_COMPILE
 
 #ifndef DACCESS_COMPILE
+#ifdef FEATURE_VARIABLE_HANDLES
 uint32_t     GetVariableHandleType(OBJECTHANDLE handle);
 void         UpdateVariableHandleType(OBJECTHANDLE handle, uint32_t type);
 uint32_t     CompareExchangeVariableHandleType(OBJECTHANDLE handle, uint32_t oldType, uint32_t newType);
+#endif //FEATURE_VARIABLE_HANDLES
 
 /*
  * Convenience prototypes for using the global handles

@@ -1066,11 +1066,13 @@ public:
     }
 #endif // FEATURE_COMINTEROP || FEATURE_COMWRAPPERS
 
+#ifdef FEATURE_VARIABLE_HANDLES
     OBJECTHANDLE CreateVariableHandle(OBJECTREF object, UINT type)
     {
         WRAPPER_NO_CONTRACT;
         return ::CreateVariableHandle(m_handleStore, object, type);
     }
+#endif //FEATURE_VARIABLE_HANDLES
 
     OBJECTHANDLE CreateDependentHandle(OBJECTREF primary, OBJECTREF secondary)
     {
