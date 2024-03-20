@@ -11,6 +11,7 @@
 
 $log = $env:andrew_log
 $clrgc = $env:andrew_clrgc
+$trace = $env:andrew_trace
 $server = $env:andrew_server
 $datas = $env:andrew_datas
 $exp = $env:andrew_exp
@@ -49,6 +50,19 @@ if ($clrgc -eq "1")
         {
             $env:DOTNET_GCName="lib$($clrgc_favor).dylib"
         }
+    }
+}
+
+if ($trace -eq "1")
+{
+    $env:COMPlus_AutoTrace_N_Tracers="1"
+    if ($IsWindows -or $ENV:OS)
+    {
+        $env:COMPlus_AutoTrace_Command="C:\Dev\diagnostics\src\Tools\dotnet-trace\test.cmd"
+    }
+    else
+    {
+        $env:COMPlus_AutoTrace_Command="/bin/bash $($home)/git/diagnostics/src/Tools/dotnet-trace/test.sh"
     }
 }
 
