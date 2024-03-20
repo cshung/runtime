@@ -38,6 +38,8 @@ function Debug-GCPerfSim    { Invoke-Expression ((Join-Path $PSScriptRoot "debug
 
 function Enable-Stress-Log  { Invoke-Expression ((Join-Path $PSScriptRoot "enable-stress-log.ps1"  ) + ""         ) }
 function Disable-Stress-Log { Invoke-Expression ((Join-Path $PSScriptRoot "disable-stress-log.ps1" ) + ""         ) }
+function Enable-Auto-Trace  { Invoke-Expression ((Join-Path $PSScriptRoot "enable-auto-trace.ps1"  ) + ""         ) }
+function Disable-Auto-Trace { Invoke-Expression ((Join-Path $PSScriptRoot "disable-auto-trace.ps1" ) + ""         ) }
 function Enable-ClrGc       { Invoke-Expression ((Join-Path $PSScriptRoot "enable-clrgc.ps1"       ) + ""         ) }
 function Disable-ClrGc      { Invoke-Expression ((Join-Path $PSScriptRoot "disable-clrgc.ps1"      ) + ""         ) }
 function Enable-WorkStation { Invoke-Expression ((Join-Path $PSScriptRoot "enable-workstation.ps1" ) + ""         ) }
@@ -78,6 +80,8 @@ Set-Alias -Name dgcp  Debug-GCPerfSim
 
 Set-Alias -Name esl   Enable-Stress-Log
 Set-Alias -Name dsl   Disable-Stress-Log
+Set-Alias -Name eat   Enable-Auto-Trace
+Set-Alias -Name dat   Disable-Auto-Trace
 Set-Alias -Name ecg   Enable-ClrGc
 Set-Alias -Name dcg   Disable-ClrGc
 Set-Alias -Name svr   Enable-Server
