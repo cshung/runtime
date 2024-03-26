@@ -2585,29 +2585,50 @@ sgen_ensure_free_space (size_t size, int generation)
 	gboolean forced = FALSE;
 
 	if (generation == GENERATION_OLD) {
+		fprintf(stdout, "sgen_ensure_free_space 1\n"); fflush(stdout);
 		if (sgen_need_major_collection (size, &forced)) {
+			fprintf(stdout, "sgen_ensure_free_space 1.1\n"); fflush(stdout);
 			reason = "LOS overflow";
 			generation_to_collect = GENERATION_OLD;
 		}
+		else
+		{
+			fprintf(stdout, "sgen_ensure_free_space 1.2\n"); fflush(stdout);
+		}
 	} else {
+		fprintf(stdout, "sgen_ensure_free_space 2\n"); fflush(stdout);
 		if (sgen_degraded_mode) {
+			fprintf(stdout, "sgen_ensure_free_space 2.1\n"); fflush(stdout);
 			if (sgen_need_major_collection (size, &forced)) {
+				fprintf(stdout, "sgen_ensure_free_space 2.1.1\n"); fflush(stdout);
 				reason = "Degraded mode overflow";
 				generation_to_collect = GENERATION_OLD;
 			}
+			else
+			{
+				fprintf(stdout, "sgen_ensure_free_space 2.1.2\n"); fflush(stdout);
+			}
 		} else if (sgen_need_major_collection (size, &forced)) {
+			fprintf(stdout, "sgen_ensure_free_space 2.2\n"); fflush(stdout);
 			reason = sgen_concurrent_collection_in_progress ? "Forced finish concurrent collection" : "Minor allowance";
 			generation_to_collect = GENERATION_OLD;
 		} else {
+			fprintf(stdout, "sgen_ensure_free_space 2.3\n"); fflush(stdout);
 			generation_to_collect = GENERATION_NURSERY;
 			reason = "Nursery full";
 		}
 	}
-
+	fprintf(stdout, "sgen_ensure_free_space 3\n"); fflush(stdout);
 	if (generation_to_collect == -1) {
+		fprintf(stdout, "sgen_ensure_free_space 3.1\n"); fflush(stdout);
 		if (sgen_concurrent_collection_in_progress && sgen_workers_all_done ()) {
+			fprintf(stdout, "sgen_ensure_free_space 3.1.1\n"); fflush(stdout);
 			generation_to_collect = GENERATION_OLD;
 			reason = "Finish concurrent collection";
+		}
+		else
+		{
+			fprintf(stdout, "sgen_ensure_free_space 3.1.2\n"); fflush(stdout);
 		}
 	}
 

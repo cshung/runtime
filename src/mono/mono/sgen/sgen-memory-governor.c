@@ -177,6 +177,7 @@ update_gc_info_memory_load (void)
 gboolean
 sgen_need_major_collection (mword space_needed, gboolean *forced)
 {
+	fprintf(stdout, "sgen_need_major_collection\n"); fflush(stdout);
 	size_t heap_size;
 
 	*forced = FALSE;
@@ -194,7 +195,10 @@ sgen_need_major_collection (mword space_needed, gboolean *forced)
 		 * we force the finishing of the collection, to avoid increased memory usage.
 		 */
 		if ((heap_size - major_start_heap_size) > major_start_heap_size * SGEN_DEFAULT_ALLOWANCE_HEAP_SIZE_RATIO)
+		{
+			fprintf(stdout, "Case 1\n"); fflush(stdout);
 			return TRUE;
+		}
 		return FALSE;
 	}
 
@@ -205,7 +209,10 @@ sgen_need_major_collection (mword space_needed, gboolean *forced)
 	}
 
 	if (space_needed > sgen_memgov_available_free_space ())
+	{
+		fprintf(stdout, "Case 2\n"); fflush(stdout);
 		return TRUE;
+	}
 
 	sgen_memgov_calculate_minor_collection_allowance ();
 
