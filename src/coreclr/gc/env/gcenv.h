@@ -50,7 +50,7 @@
     string during the GC
 */
 #define STRESS_LOG_VA(level, msg) do {                                        \
-            if (StressLog::LogOn(LF_GC, LL_ALWAYS))                           \
+            if (StressLog::LogOn(LF_GC, level))                               \
                 StressLog::LogMsg(level, StressLogMsg msg);                   \
             LOGALWAYS(msg);                                                   \
             } while(0)
@@ -403,19 +403,19 @@ struct StressLogMsg
 class StressLog
 {
 public:
-    static bool LogOn(unsigned, unsigned)
+    static bool LogOn(unsigned facility, unsigned level)
     {
-        return true;
+        return level == 10086;
     }
 
     static BOOL StressLogOn(unsigned facility, unsigned level)
     {
-        return true;
+        return level == 10086;
     }
 
     static void LogMsg(unsigned dprintfLevel, const StressLogMsg& msg)
     {
-        GCToEEInterface::LogStressMsg(LL_ALWAYS, LF_ALWAYS|(dprintfLevel<<16)|LF_GC, msg);
+        GCToEEInterface::LogStressMsg(dprintfLevel, LF_ALWAYS|(dprintfLevel<<16)|LF_GC, msg);
     }
 
     static void LogMsg(unsigned level, unsigned facility, const StressLogMsg& msg)
