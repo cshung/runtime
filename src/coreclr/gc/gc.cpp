@@ -18,6 +18,14 @@
 
 #include "gcpriv.h"
 
+#ifdef ANDREW_DIAGNOSTICS
+void FATAL_GC_ERROR_2()
+{
+    int* p = nullptr;
+    *p = 10086;
+}
+#endif //ANDREW_DIAGNOSTICS
+
 #if defined(TARGET_AMD64) && defined(TARGET_WINDOWS)
 #define USE_VXSORT
 #else
@@ -766,8 +774,9 @@ enum join_heap_index
 
 class t_join
 {
+public:
     join_structure join_struct;
-
+private:
     int id;
     gc_join_flavor flavor;
 
@@ -2942,6 +2951,11 @@ int gc_heap::dynamic_adaptation_mode = dynamic_adaptation_default;
 gc_heap::dynamic_heap_count_data_t SVR::gc_heap::dynamic_heap_count_data;
 uint64_t gc_heap::last_suspended_end_time = 0;
 size_t gc_heap::gc_index_full_gc_end = 0;
+#ifdef ANDREW_DIAGNOSTICS
+size_t gc_heap::last_hc_change_gc_index = 0;
+size_t gc_heap::last_hc_change_failed_gc_index_bgc = 0;
+size_t gc_heap::last_hc_change_failed_gc_index_prep = 0;
+#endif //ANDREW_DIAGNOSTICS
 
 #ifdef STRESS_DYNAMIC_HEAP_COUNT
 int gc_heap::heaps_in_this_gc = 0;
@@ -7089,6 +7103,10 @@ void gc_heap::gc_thread_function ()
                     {
                         dprintf (6666, ("changing heap count due to timeout"));
                         check_heap_count();
+#ifdef ANDREW_DIAGNOSTICS
+                        // This only happen on server gc thread for heap 0
+                        append_andrew_p_record (change_hc_timeout);
+#endif //ANDREW_DIAGNOSTICS
                     }
                 }
 #endif //DYNAMIC_HEAP_COUNT
@@ -7113,6 +7131,10 @@ void gc_heap::gc_thread_function ()
                     // this was a request to do a GC so make sure we follow through with one.
                     dprintf (6666, ("changing heap count at a GC start"));
                     check_heap_count ();
+#ifdef ANDREW_DIAGNOSTICS
+                    // This only happen on server gc thread for heap 0
+                    append_andrew_p_record (change_hc_gcstart);
+#endif //ANDREW_DIAGNOSTICS
                 }
             }
 
@@ -7127,10 +7149,18 @@ void gc_heap::gc_thread_function ()
                 if (idle_thread_count != dynamic_heap_count_data.idle_thread_count)
                 {
                     spin_and_wait (spin_count, (idle_thread_count == dynamic_heap_count_data.idle_thread_count));
+#ifdef ANDREW_DIAGNOSTICS
+                    // This only happen on server gc thread for heap 0
+                    append_andrew_p_record (after_idle);
+#endif //ANDREW_DIAGNOSTICS
                     dprintf (9999, ("heap count changed %d->%d, now idle is %d", dynamic_heap_count_data.last_n_heaps, n_heaps,
                         VolatileLoadWithoutBarrier (&dynamic_heap_count_data.idle_thread_count)));
                 }
 
+#ifdef ANDREW_DIAGNOSTICS
+                // This only happen on server gc thread for heap 0
+                append_andrew_p_record (set_last_n_heaps_to_new_hc);
+#endif //ANDREW_DIAGNOSTICS
                 dynamic_heap_count_data.last_n_heaps = n_heaps;
             }
 #endif //DYNAMIC_HEAP_COUNT
@@ -7198,6 +7228,9 @@ void gc_heap::gc_thread_function ()
                         }
                         else
                         {
+#ifdef ANDREW_DIAGNOSTICS
+                            append_andrew_p_record (wait_after_change);
+#endif //ANDREW_DIAGNOSTICS
                             Interlocked::Increment (&dynamic_heap_count_data.idle_thread_count);
                             dprintf (9999, ("GC thread %d wait_on_idle(%d < %d)(gc%Id), total idle %d", heap_number, old_n_heaps, new_n_heaps,
                                 VolatileLoadWithoutBarrier (&settings.gc_index), VolatileLoadWithoutBarrier (&dynamic_heap_count_data.idle_thread_count)));
@@ -7212,6 +7245,9 @@ void gc_heap::gc_thread_function ()
                 }
                 else
                 {
+#ifdef ANDREW_DIAGNOSTICS
+                    append_andrew_p_record (wait_on_idle);
+#endif //ANDREW_DIAGNOSTICS
                     Interlocked::Increment (&dynamic_heap_count_data.idle_thread_count);
                     dprintf (9999, ("GC thread %d wait_on_idle(< max %d)(gc%Id), total  idle %d", heap_number, num_threads_to_wake,
                         VolatileLoadWithoutBarrier (&settings.gc_index), VolatileLoadWithoutBarrier (&dynamic_heap_count_data.idle_thread_count)));
@@ -14856,6 +14892,10 @@ gc_heap::init_gc_heap (int h_number)
 #ifdef _DEBUG
     memset (committed_by_oh_per_heap, 0, sizeof (committed_by_oh_per_heap));
 #endif
+#ifdef ANDREW_DIAGNOSTICS
+    memset (andrew_p_records, 0, sizeof (andrew_p_records));
+    andrew_p_record_pointer = 0;
+#endif //ANDREW_DIAGNOSTICS
 
     g_heaps [h_number] = this;
 
@@ -24190,6 +24230,11 @@ void gc_heap::garbage_collect (int n)
 #ifdef MULTIPLE_HEAPS
             dprintf(2, ("Joined to perform a background GC"));
 
+#ifdef ANDREW_DIAGNOSTICS
+            // This only happen on server gc thread for the joined heap
+            append_andrew_p_record (starting_bgc);
+#endif //ANDREW_DIAGNOSTICS
+
             for (int i = 0; i < n_heaps; i++)
             {
                 gc_heap* hp = g_heaps[i];
@@ -24212,6 +24257,14 @@ void gc_heap::garbage_collect (int n)
                 background_saved_highest_address = highest_address;
             }
 #endif //MULTIPLE_HEAPS
+
+#ifdef ANDREW_DIAGNOSTICS
+            if (!do_concurrent_p)
+            {
+                // This is the thread calling garbage_collect
+                append_andrew_p_record (failed_bgc_thread_creation);
+            }
+#endif //ANDREW_DIAGNOSTICS
 
             if (do_concurrent_p)
             {
@@ -24265,7 +24318,7 @@ void gc_heap::garbage_collect (int n)
 
                 if (!do_ephemeral_gc_p)
                 {
-                    do_background_gc();
+                    do_background_gc (__this);
                 }
             }
             else
@@ -24306,7 +24359,7 @@ void gc_heap::garbage_collect (int n)
                     settings = saved_bgc_settings;
                     assert (settings.concurrent);
 
-                    do_background_gc();
+                    do_background_gc (__this);
 
 #ifdef MULTIPLE_HEAPS
                     gc_t_join.restart();
@@ -25523,6 +25576,10 @@ void gc_heap::check_heap_count ()
             dynamic_heap_count_data.new_n_heaps = n_heaps;
             dprintf (6666, ("can't change heap count! BGC in progress"));
 
+#ifdef ANDREW_DIAGNOSTICS
+            last_hc_change_failed_gc_index_bgc = VolatileLoadWithoutBarrier (&settings.gc_index);
+            append_andrew_p_record (check_hc_bgc_in_progress);
+#endif //ANDREW_DIAGNOSTICS
             GCToEEInterface::RestartEE(TRUE);
         }
 #endif //BACKGROUND_GC
@@ -25535,6 +25592,10 @@ void gc_heap::check_heap_count ()
         {
             // we don't have sufficient resources - reset the new heap count
             dynamic_heap_count_data.new_n_heaps = n_heaps;
+#ifdef ANDREW_DIAGNOSTICS
+            append_andrew_p_record (check_hc_fail_preparation);
+            last_hc_change_failed_gc_index_prep = VolatileLoadWithoutBarrier (&settings.gc_index);
+#endif //ANDREW_DIAGNOSTICS
         }
     }
 
@@ -25735,6 +25796,9 @@ bool gc_heap::prepare_to_change_heap_count (int new_n_heaps)
 bool gc_heap::change_heap_count (int new_n_heaps)
 {
     dprintf (9999, ("BEG heap%d changing %d->%d", heap_number, n_heaps, new_n_heaps));
+#ifdef ANDREW_DIAGNOSTICS
+    last_hc_change_gc_index = VolatileLoadWithoutBarrier (&settings.gc_index);
+#endif //DREW_DIAGNOSTICS
 
     // use this variable for clarity - n_heaps will change during the transition
     int old_n_heaps = n_heaps;
@@ -26041,6 +26105,9 @@ bool gc_heap::change_heap_count (int new_n_heaps)
             fix_allocation_contexts_heaps();
         }
 
+#ifdef ANDREW_DIAGNOSTICS
+        append_andrew_p_record (change_last_n_heaps);
+#endif //ANDREW_DIAGNOSTICS
         dynamic_heap_count_data.last_n_heaps = old_n_heaps;
     }
 
@@ -26055,6 +26122,11 @@ bool gc_heap::change_heap_count (int new_n_heaps)
 
             gc_t_join.restart ();
         }
+    }
+
+    if (gc_heap::dynamic_heap_count_data.new_n_heaps != gc_heap::n_heaps)
+    {
+        FATAL_GC_ERROR_2();
     }
 
     return true;
@@ -37890,6 +37962,9 @@ void gc_heap::background_mark_phase ()
     // we can do restart ee on the 1st thread that got here. Make sure we handle the
     // sizedref handles correctly.
 #ifdef MULTIPLE_HEAPS
+#ifdef ANDREW_DIAGNOSTICS
+        append_andrew_p_record (join_to_restart_vm);
+#endif //ANDREW_DIAGNOSTICS
     bgc_t_join.join(this, gc_join_restart_ee);
     if (bgc_t_join.joined())
 #endif //MULTIPLE_HEAPS
@@ -39107,8 +39182,11 @@ void gc_heap::start_c_gc()
     bgc_start_event.Set();
 }
 
-void gc_heap::do_background_gc()
+void gc_heap::do_background_gc(gc_heap* caller_heap)
 {
+#ifdef ANDREW_DIAGNOSTICS
+    caller_heap->append_andrew_p_record (starting_bgc_2);
+#endif //ANDREW_DIAGNOSTICS
     dprintf (2, ("starting a BGC"));
 #ifdef MULTIPLE_HEAPS
     for (int i = 0; i < n_heaps; i++)
@@ -39144,8 +39222,39 @@ void gc_heap::kill_gc_thread()
     bgc_thread = 0;
 }
 
+#ifdef ANDREW_DIAGNOSTICS
+
+class ThreadDeathDetector
+{
+public:
+    ThreadDeathDetector()
+    {
+        _on = false;
+    }
+    ~ThreadDeathDetector()
+    {
+        if (_on)
+        {
+            FATAL_GC_ERROR_2();
+        }
+    }
+    void on() { _on = true; }
+private:
+    bool _on;
+};
+
+#ifndef __GNUC__
+__declspec(thread) ThreadDeathDetector tdd;
+#else // !__GNUC__
+__thread ThreadDeathDetector tdd;
+#endif // !__GNUC__
+#endif //ANDREW_DIAGNOSTICS
+
 void gc_heap::bgc_thread_function()
 {
+#ifdef ANDREW_DIAGNOSTICS
+    tdd.on();
+#endif //ANDREW_DIAGNOSTICS
     assert (background_gc_done_event.IsValid());
     assert (bgc_start_event.IsValid());
 
@@ -39201,7 +39310,12 @@ void gc_heap::bgc_thread_function()
             }
             bgc_threads_timeout_cs.Leave();
             if (do_exit)
+            {
+#ifdef ANDREW_DIAGNOSTICS
+                append_andrew_p_record (bgc_exit_case_1);
+#endif //ANDREW_DIAGNOSTICS
                 break;
+            }
             else
             {
                 dprintf (3, ("GC thread needed, not exiting"));
@@ -39211,6 +39325,9 @@ void gc_heap::bgc_thread_function()
         // if we signal the thread with no concurrent work to do -> exit
         if (!settings.concurrent)
         {
+#ifdef ANDREW_DIAGNOSTICS
+            append_andrew_p_record (bgc_exit_case_2);
+#endif //ANDREW_DIAGNOSTICS
             dprintf (3, ("no concurrent GC needed, exiting"));
             break;
         }
@@ -39221,8 +39338,14 @@ void gc_heap::bgc_thread_function()
             dd_fragmentation (dynamic_data_of (max_generation))));
 
 #ifdef DYNAMIC_HEAP_COUNT
+#ifdef ANDREW_DIAGNOSTICS
+        append_andrew_p_record (bgc_starting);
+#endif //ANDREW_DIAGNOSTICS
         if (n_heaps <= heap_number)
         {
+#ifdef ANDREW_DIAGNOSTICS
+            append_andrew_p_record (bgc_thread_waiting);
+#endif //ANDREW_DIAGNOSTICS
             // this is the case where we have more background GC threads than heaps
             // - wait until we're told to continue...
             dprintf (9999, ("BGC thread %d idle (%d heaps) (gc%Id)", heap_number, n_heaps, VolatileLoadWithoutBarrier (&settings.gc_index)));
@@ -39291,6 +39414,9 @@ void gc_heap::bgc_thread_function()
             fire_pevents();
 #endif //MULTIPLE_HEAPS
 
+#ifdef ANDREW_DIAGNOSTICS
+            append_andrew_p_record (bgc_ended);
+#endif //ANDREW_DIAGNOSTICS
             c_write (settings.concurrent, FALSE);
             gc_background_running = FALSE;
             keep_bgc_threads_p = FALSE;
@@ -39312,6 +39438,10 @@ void gc_heap::bgc_thread_function()
 
     FIRE_EVENT(GCTerminateConcurrentThread_V1);
 
+#ifdef ANDREW_DIAGNOSTICS
+    append_andrew_p_record (exiting_bgc_thread);
+    FATAL_GC_ERROR_2 ();
+#endif //ANDREW_DIAGNOSTICS
     dprintf (3, ("bgc_thread thread exiting"));
     return;
 }
@@ -52924,3 +53054,79 @@ size_t gc_heap::get_mark_array_size (heap_segment* seg)
     return 0;
 }
 #endif //USE_REGIONS
+
+
+#ifdef ANDREW_DIAGNOSTICS
+void gc_heap::append_andrew_p_record (andrew_stage stage)
+{
+    int bgc_thread_id;
+    int bgc_thread_state;
+    if (this->bgc_thread)
+    {
+        const int m_state_offset            = 8;
+        const int m_osthread_id_offset      = 0x1b8;
+        uint8_t*  raw_pointer_to_bgc_thread = (uint8_t*)this->bgc_thread;
+        uint8_t*  raw_pointer_to_state      = raw_pointer_to_bgc_thread + m_state_offset;
+        int32_t*  pointer_to_state          = (int32_t*)raw_pointer_to_state;
+                  bgc_thread_state          = *pointer_to_state;
+        uint8_t*  raw_pointer_to_thread_id  = raw_pointer_to_bgc_thread + m_osthread_id_offset;
+        uint64_t* pointer_to_thread_id      = (uint64_t*)raw_pointer_to_thread_id;
+        uint64_t  thread_id                 = *pointer_to_thread_id;
+                  bgc_thread_id             = (int)thread_id;
+    }
+    else
+    {
+        bgc_thread_id = -1;
+        bgc_thread_state = -1;
+    }
+    andrew_p_records[andrew_p_record_pointer].timestamp                =         GetHighPrecisionTimeStamp();
+    andrew_p_records[andrew_p_record_pointer].stage                    =         stage;
+    andrew_p_records[andrew_p_record_pointer].thread_id                = (int)   GCToOSInterface::GetCurrentThreadIdForLogging();
+    andrew_p_records[andrew_p_record_pointer].last_n_heaps             = (short) dynamic_heap_count_data.last_n_heaps;
+    andrew_p_records[andrew_p_record_pointer].new_n_heaps              = (short) dynamic_heap_count_data.new_n_heaps;
+    andrew_p_records[andrew_p_record_pointer].should_change_heap_count =         dynamic_heap_count_data.should_change_heap_count;
+    andrew_p_records[andrew_p_record_pointer].idle_thread_count        = (short) dynamic_heap_count_data.idle_thread_count;
+    andrew_p_records[andrew_p_record_pointer].gc_t_join_n_threads      = (short) gc_t_join.join_struct.n_threads;
+    andrew_p_records[andrew_p_record_pointer].gc_t_join_join_lock      = (short) gc_t_join.join_struct.join_lock;
+    andrew_p_records[andrew_p_record_pointer].gc_t_join_joined_p       =         gc_t_join.join_struct.joined_p;
+    andrew_p_records[andrew_p_record_pointer].bgc_t_join_n_threads     = (short) bgc_t_join.join_struct.n_threads;
+    andrew_p_records[andrew_p_record_pointer].bgc_t_join_join_lock     = (short) bgc_t_join.join_struct.join_lock;
+    andrew_p_records[andrew_p_record_pointer].bgc_t_join_joined_p      =         bgc_t_join.join_struct.joined_p;
+    andrew_p_records[andrew_p_record_pointer].n_heaps                  = (short) n_heaps;
+    andrew_p_records[andrew_p_record_pointer].gc_index                 =         settings.gc_index;
+    andrew_p_records[andrew_p_record_pointer].concurrent               =         settings.concurrent != 0;
+    andrew_p_records[andrew_p_record_pointer].bgc_thread_id            =         bgc_thread_id;
+    andrew_p_records[andrew_p_record_pointer].bgc_thread_state         =         bgc_thread_state;
+
+    andrew_p_record_pointer++;
+    if (andrew_p_record_pointer == andrew_p_record_count)
+    {
+        andrew_p_record_pointer = 0;
+    }
+
+    bool is_type_1_stages = (stage == change_hc_timeout) || (stage == change_hc_gcstart) || (stage == set_last_n_heaps_to_new_hc);
+    bool is_type_2_stages = (starting_bgc <= stage && stage <= failed_bgc_thread_creation) || (join_to_restart_vm <= stage && stage <= bgc_exit_case_2);
+    if (is_type_1_stages || is_type_2_stages)
+    {
+        if (gc_heap::dynamic_heap_count_data.new_n_heaps != gc_heap::n_heaps)
+        {
+            FATAL_GC_ERROR_2();
+        }
+    }
+    if (is_type_2_stages)
+    {
+        if (gc_heap::dynamic_heap_count_data.last_n_heaps != gc_heap::n_heaps)
+        {
+            FATAL_GC_ERROR_2();
+        }
+    }
+    if (bgc_thread_id == 0)
+    {
+        FATAL_GC_ERROR_2();
+    }
+    if (bgc_thread_state == 0)
+    {
+        FATAL_GC_ERROR_2();
+    }
+}
+#endif //ANDREW_DIAGNOSTICS

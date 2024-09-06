@@ -1492,6 +1492,57 @@ public:
 
 float median_of_3 (float a, float b, float c);
 
+#ifdef DYNAMIC_HEAP_COUNT
+#define ANDREW_DIAGNOSTICS
+#endif
+
+#ifdef ANDREW_DIAGNOSTICS
+enum andrew_stage
+{
+    change_hc_timeout          = 1,  // gc_thread_function    +
+    change_hc_gcstart          = 2,  // gc_thread_function    +
+    after_idle                 = 3,  // gc_thread_function
+    set_last_n_heaps_to_new_hc = 4,  // gc_thread_function    +
+    wait_after_change          = 5,  // gc_thread_function
+    wait_on_idle               = 6,  // gc_thread_function
+    starting_bgc               = 7,  // garbage_collect       *
+    failed_bgc_thread_creation = 8,  // garbage_collect       *
+    check_hc_bgc_in_progress   = 9,  // check_heap_count
+    check_hc_fail_preparation  = 10, // check_heap_count
+    change_last_n_heaps        = 11, // change_heap_count
+    join_to_restart_vm         = 12, // background_mark_phase *
+    starting_bgc_2             = 13, // do_background_gc      *
+    bgc_starting               = 14, // bgc_thread_function   *
+    bgc_thread_waiting         = 15, // bgc_thread_function   *
+    bgc_ended                  = 16, // bgc_thread_function   *
+    exiting_bgc_thread         = 17, // bgc_thread_function   *
+    bgc_exit_case_1            = 18, // bgc_thread_function   *
+    bgc_exit_case_2            = 19, // bgc_thread_function   *
+};
+
+struct andrew_p_record
+{
+    andrew_stage stage;
+    uint64_t     timestamp;
+    int          thread_id;                /* actual type was uint64_t */
+    short        last_n_heaps;             /* actual type was int      */
+    short        new_n_heaps;              /* actual type was int      */
+    bool         should_change_heap_count;
+    short        idle_thread_count;        /* actual type was int32_t  */
+    short        gc_t_join_n_threads;      /* actual type was int      */
+    short        gc_t_join_join_lock;      /* actual type was int      */
+    bool         gc_t_join_joined_p;
+    short        bgc_t_join_n_threads;     /* actual type was int      */
+    short        bgc_t_join_join_lock;     /* actual type was int      */
+    bool         bgc_t_join_joined_p;
+    short        n_heaps;                  /* actual type was int      */
+    size_t       gc_index;
+    bool         concurrent;
+    int          bgc_thread_id;            /* actual type was SIZE_T   */
+    int          bgc_thread_state;
+};
+#endif //ANDREW_DIAGNOSTICS
+
 //class definition of the internal class
 class gc_heap
 {
@@ -3283,7 +3334,7 @@ private:
     PER_HEAP_ISOLATED_METHOD void start_c_gc();
     PER_HEAP_METHOD void kill_gc_thread();
     PER_HEAP_METHOD void bgc_thread_function();
-    PER_HEAP_ISOLATED_METHOD void do_background_gc();
+    PER_HEAP_ISOLATED_METHOD void do_background_gc (gc_heap* caller_heap);
     PER_HEAP_ISOLATED_METHOD void bgc_thread_stub (void* arg);
 #endif //BACKGROUND_GC
 
@@ -4334,6 +4385,18 @@ private:
     // If the last full GC is blocking, this is that GC's index; for BGC, this is the settings.gc_index
     // when the BGC ended.
     PER_HEAP_ISOLATED_FIELD_MAINTAINED size_t gc_index_full_gc_end;
+
+#ifdef ANDREW_DIAGNOSTICS
+    #define andrew_p_record_count 100
+    PER_HEAP_FIELD_DIAG_ONLY int andrew_p_record_pointer;
+    PER_HEAP_FIELD_DIAG_ONLY andrew_p_record andrew_p_records[andrew_p_record_count];
+    PER_HEAP_METHOD void append_andrew_p_record(andrew_stage stage);
+
+    // copied from commit
+    PER_HEAP_ISOLATED_FIELD_MAINTAINED size_t last_hc_change_gc_index;
+    PER_HEAP_ISOLATED_FIELD_MAINTAINED size_t last_hc_change_failed_gc_index_bgc;
+    PER_HEAP_ISOLATED_FIELD_MAINTAINED size_t last_hc_change_failed_gc_index_prep;
+#endif //ANDREW_DIAGNOSTICS
 #endif //DYNAMIC_HEAP_COUNT
 
     /****************************************************/
