@@ -11,7 +11,12 @@ namespace CoreLab
     {
         private static void Main()
         {
-            Console.WriteLine("Andrew wins");
+            Console.WriteLine("Hello hack");
+            while (true)
+            {
+                int[] array = new int[20];
+                array[0] = 12;
+            }
         }
     }
 }

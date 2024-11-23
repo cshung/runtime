@@ -806,6 +806,7 @@ static fq_walk_fn g_FQWalkFn = &WalkFReachableObjects;
 
 void GCToEEInterface::DiagGCStart(int gen, bool isInduced)
 {
+    printf("GCToEEInterface::DiagGCStart is called\n");
 #ifdef GC_PROFILING
     DiagUpdateGenerationBounds();
     GarbageCollectionStartedCallback(gen, isInduced);
@@ -835,6 +836,7 @@ void GCToEEInterface::DiagUpdateGenerationBounds()
 
 void GCToEEInterface::DiagGCEnd(size_t index, int gen, int reason, bool fConcurrent)
 {
+    printf("GCToEEInterface::DiagGCEnd is called\n");
 #ifdef GC_PROFILING
     // We were only doing generation bounds and GC finish callback for non concurrent GCs so
     // I am keeping that behavior to not break profilers. But if BasicGC monitoring is enabled

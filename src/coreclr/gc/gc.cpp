@@ -24216,6 +24216,19 @@ void gc_heap::garbage_collect (int n)
         STRESS_LOG1(LF_GCROOTS|LF_GC|LF_GCALLOC, LL_INFO10,
                 "condemned generation num: %d\n", settings.condemned_generation);
 
+        if (!is_bgc_in_progress())
+        {
+            //
+            // Hack step 1:
+            //
+            // For the 1st GC, we will reach here and force a background GC
+            // As in hack step 4, we block the BGC from completing, so
+            // we will never run this again.
+            //
+            settings.condemned_generation = 2;
+            should_do_blocking_collection = FALSE;
+        }
+
         record_gcs_during_no_gc();
 
         if (settings.condemned_generation > 1)
@@ -24239,6 +24252,14 @@ void gc_heap::garbage_collect (int n)
             !temp_disable_concurrent_p &&
             ((settings.pause_mode == pause_interactive) || (settings.pause_mode == pause_sustained_low_latency)))
         {
+            //
+            // Hack step 2: 
+            // Suppose the profiler doesn't set temp_disable_concurrent_p
+            // We should reach here which will trigger a BGC for the first GC.
+            //
+            // On the other hand, if the profiler blocked that from happening, 
+            // then we won't be triggering a background GC.
+            //
             keep_bgc_threads_p = TRUE;
             c_write (settings.concurrent, TRUE);
             memset (&bgc_data_global, 0, sizeof(bgc_data_global));
@@ -24403,6 +24424,19 @@ void gc_heap::garbage_collect (int n)
 #endif //MULTIPLE_HEAPS
 
                 int gen = check_for_ephemeral_alloc();
+                //
+                // Hack step 3:
+                //
+                // Sometimes, we do a Gen1 GC before we start BGC.
+                // (The comment below is contradictory ... )
+                // This hacks will avoid doing that.
+                //
+                // Doing that leads to another interesting bug.
+                // It seems to me that the corresponding Start event
+                // for that ephemeral GC is missing, but the End event 
+                // is fired. That doesn't sound right.
+                //
+                gen = -1;
                 // always do a gen1 GC before we start BGC.
                 dont_restart_ee_p = TRUE;
                 if (gen == -1)
@@ -28352,7 +28386,20 @@ gc_heap::background_mark_simple (uint8_t* o THREAD_NUMBER_DCL)
                 background_mark_simple1 (o THREAD_NUMBER_ARG);
             }
         }
-        allow_fgc();
+        //
+        // Hack step 4:
+        //
+        // This while true loop make sure the BGC never ends
+        // the allow_fgc() call here allows other threads to perform 
+        // a foreground ephemeral GC. 
+        //
+        // If we don't call this, ee_suspend will never ends and we will
+        // be stuck in a deadlock.
+        //
+        while (true)
+        {
+            allow_fgc();
+        }
     }
 }
 
