@@ -15,6 +15,7 @@ function Set-Mode-Release   { Invoke-Expression ((Join-Path $PSScriptRoot "set-m
 
 function Set-Arch-x86       { Invoke-Expression ((Join-Path $PSScriptRoot "set-arch.ps1"           ) + " x86"     ) }
 function Set-Arch-x64       { Invoke-Expression ((Join-Path $PSScriptRoot "set-arch.ps1"           ) + " x64"     ) }
+function Set-Arch-arm64     { Invoke-Expression ((Join-Path $PSScriptRoot "set-arch.ps1"           ) + " arm64"   ) }
 
 function Build-CoreClr      { Invoke-Expression ((Join-Path $PSScriptRoot "build-coreclr.ps1"      ) + ""         ) }
 function Build-ClrGc        { Invoke-Expression ((Join-Path $PSScriptRoot "build-clrgc.ps1"        ) + ""         ) }
@@ -47,44 +48,45 @@ function Enable-Segment     { Invoke-Expression ((Join-Path $PSScriptRoot "enabl
 function Enable-Regions     { Invoke-Expression ((Join-Path $PSScriptRoot "disable-segment.ps1"    ) + ""         ) }
 
 # Set the current build flavor to debug/checked/release
-Set-Alias -Name smd  Set-Mode-Debug
-Set-Alias -Name smc  Set-Mode-Checked
-Set-Alias -Name smr  Set-Mode-Release
+Set-Alias -Name smd   Set-Mode-Debug
+Set-Alias -Name smc   Set-Mode-Checked
+Set-Alias -Name smr   Set-Mode-Release
 
-# Set the current architecture to x86/x64
-Set-Alias -Name a86  Set-Arch-x86
-Set-Alias -Name a64  Set-Arch-x64
+# Set the current architecture to x86/x64/arm64
+Set-Alias -Name a86   Set-Arch-x86
+Set-Alias -Name a64   Set-Arch-x64
+Set-Alias -Name arm64 Set-Arch-arm64
 
 # Build CoreClr/ClrGc/Library/CoreRoot
-Set-Alias -Name bc   Build-CoreClr
-Set-Alias -Name bcg  Build-ClrGc
-Set-Alias -Name bl   Build-Library
-Set-Alias -Name bcr  Build-CoreRoot
+Set-Alias -Name bc    Build-CoreClr
+Set-Alias -Name bcg   Build-ClrGc
+Set-Alias -Name bl    Build-Library
+Set-Alias -Name bcr   Build-CoreRoot
 
-Set-Alias -Name bcl  Build-CoreLab
-Set-Alias -Name rcl  Run-CoreLab
-Set-Alias -Name dcl  Debug-CoreLab
+Set-Alias -Name bcl   Build-CoreLab
+Set-Alias -Name rcl   Run-CoreLab
+Set-Alias -Name dcl   Debug-CoreLab
 
-Set-Alias -Name bgs  Build-GCSample
-Set-Alias -Name rgs  Run-GCSample
-Set-Alias -Name dgs  Debug-GCSample
+Set-Alias -Name bgs   Build-GCSample
+Set-Alias -Name rgs   Run-GCSample
+Set-Alias -Name dgs   Debug-GCSample
 
-Set-Alias -Name bt   Build-Test
-Set-Alias -Name rt   Run-Test
-Set-Alias -Name dt   Debug-Test
+Set-Alias -Name bt    Build-Test
+Set-Alias -Name rt    Run-Test
+Set-Alias -Name dt    Debug-Test
 
-Set-Alias -Name rgcp  Run-GCPerfSim
-Set-Alias -Name dgcp  Debug-GCPerfSim
+Set-Alias -Name rgcp   Run-GCPerfSim
+Set-Alias -Name dgcp   Debug-GCPerfSim
 
-Set-Alias -Name esl   Enable-Stress-Log
-Set-Alias -Name dsl   Disable-Stress-Log
-Set-Alias -Name ecg   Enable-ClrGc
-Set-Alias -Name dcg   Disable-ClrGc
-Set-Alias -Name svr   Enable-Server
-Set-Alias -Name wks   Enable-WorkStation
-Set-Alias -Name datas Enable-Datas
-Set-Alias -Name seg   Enable-Segment
-Set-Alias -Name reg   Enable-Regions
+Set-Alias -Name esl    Enable-Stress-Log
+Set-Alias -Name dsl    Disable-Stress-Log
+Set-Alias -Name ecg    Enable-ClrGc
+Set-Alias -Name dcg    Disable-ClrGc
+Set-Alias -Name svr    Enable-Server
+Set-Alias -Name wks    Enable-WorkStation
+Set-Alias -Name datas  Enable-Datas
+Set-Alias -Name seg    Enable-Segment
+Set-Alias -Name reg    Enable-Regions
 
 # PowerShell language note - backtick is used to escape the double quote
 function alert { param ($msg)  Invoke-Expression ((Join-Path $PSScriptRoot "alert.ps1"              ) + " `"" + $msg  + "`"" ) }

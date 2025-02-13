@@ -16,9 +16,10 @@ switch($mode)
 
 switch($arch)
 {
-    "x86"     { $arch_part = "x86"  }
-    "x64"     { $arch_part = "x64"  }
-    Default   { $arch_part = "x64"  }
+    "x86"     { $arch_part = "x86"   }
+    "x64"     { $arch_part = "x64"   }
+    "arm64"   { $arch_part = "arm64" }
+    Default   { $arch_part = "x64"   }
 }
 
 $script_path         = path "$($PSScriptRoot)\..\CoreLab"
