@@ -13,7 +13,8 @@ if (-not($arch))
 #
 if (
     ($arch -ne "x86") -and
-    ($arch -ne "x64")
+    ($arch -ne "x64") -and
+    ($arch -ne "arm64")
 )
 {
     Write-Output "Unsupported architecture"

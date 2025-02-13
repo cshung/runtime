@@ -45,9 +45,10 @@ else
 
 switch($arch)
 {
-    "x86"     { $rid = $rid_os_part + "-x86"  }
-    "x64"     { $rid = $rid_os_part + "-x64"  }
-    Default   { $rid = $rid_os_part + "-x64"  }
+    "x86"     { $rid = $rid_os_part + "-x86"   }
+    "x64"     { $rid = $rid_os_part + "-x64"   }
+    "arm64"   { $rid = $rid_os_part + "-arm64" }
+    Default   { $rid = $rid_os_part + "-x64"   }
 }
 
 function path([string] $s)
