@@ -615,6 +615,10 @@ struct MSLAYOUT DacpTieredVersionData
         OptimizationTier_OptimizedTier1OSR,
         OptimizationTier_QuickJittedInstrumented,
         OptimizationTier_OptimizedTier1Instrumented,
+        //
+        // TODO (andrewau) Do we need to version the contract for adding a new enum value here?
+        //
+        OptimizationTier_OptimizedTierInterpreted,
     };
 
     CLRDATA_ADDRESS NativeCodeAddr;

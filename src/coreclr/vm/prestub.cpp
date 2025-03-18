@@ -438,7 +438,14 @@ PCODE MethodDesc::PrepareILBasedCode(PrepareCodeConfig* pConfig)
             InterpreterPrecode* pPrecode = Precode::AllocateInterpreterPrecode(pCode, GetLoaderAllocator(), &amt);
             amt.SuppressRelease();
             pCode = PINSTRToPCODE(pPrecode->GetEntryPoint());
-            SetNativeCodeInterlocked(pCode);
+
+            {
+                CodeVersionManager::LockHolder codeVersioningLockHolder;
+                ILCodeVersion ilCodeVersion = pConfig->GetCodeVersion().GetILCodeVersion();
+                NativeCodeVersion interpretedVersion;
+                ilCodeVersion.AddNativeCodeVersion(pConfig->GetMethodDesc(), NativeCodeVersion::OptimizationTierInterpreted, &interpretedVersion);
+                interpretedVersion.SetNativeCodeInterlocked(pPrecode->GetData()->ByteCodeAddr);
+            }
         }
 #endif // FEATURE_INTERPRETER
     }

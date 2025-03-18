@@ -1285,6 +1285,15 @@ HRESULT ClrDataAccess::GetTieredVersions(
                 nativeCodeAddrs[count].OptimizationTier = DacpTieredVersionData::OptimizationTier_Optimized;
             }
 
+            //
+            // There must be some reasons why do we need to special case above,
+            // I have no idea why yet, and I am worried this is going to cause problems.
+            //
+            if ((int)(*iter).GetOptimizationTier() == NativeCodeVersion::OptimizationTierInterpreted)
+            {
+                nativeCodeAddrs[count].OptimizationTier = DacpTieredVersionData::OptimizationTier_OptimizedTierInterpreted;
+            }
+
             ++count;
 
             if (count >= cNativeCodeAddrs)
