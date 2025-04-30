@@ -685,6 +685,7 @@ int32_t* InterpCompiler::EmitCodeIns(int32_t *ip, InterpInst *ins, TArray<Reloc*
             // Ignore branch to the next basic block. Revert the added INTOP_BR.
             ip--;
             reverted = true;
+            ins->flags |= INTERP_INST_FLAG_REVERTED;
         }
         else
         {
@@ -706,6 +707,7 @@ int32_t* InterpCompiler::EmitCodeIns(int32_t *ip, InterpInst *ins, TArray<Reloc*
         // Revert opcode emit
         ip--;
         reverted = true;
+        ins->flags |= INTERP_INST_FLAG_REVERTED;
 
         int destOffset = m_pVars[ins->dVar].offset;
         int srcOffset = m_pVars[ins->sVars[0]].offset;
@@ -1373,7 +1375,8 @@ bool InterpCompiler::CreateBasicBlocks(CORINFO_METHOD_INFO* methodInfo)
     exceptionBlockStack[exceptionStackPointer] = nullptr;
     exceptionStackPointer++;
 
-    InterpBasicBlock *lastBB = nullptr;
+    InterpBasicBlock *lastBodyBB = nullptr;
+    InterpBasicBlock *lastFuncletBB = nullptr;
     while (ip < codeEnd)
     {
         int32_t insOffset = (int32_t)(ip - codeStart);
@@ -1391,10 +1394,10 @@ bool InterpCompiler::CreateBasicBlocks(CORINFO_METHOD_INFO* methodInfo)
                 // TODO: Assert stack pointer inside range
                 while (insOffset == exceptionExitOffsetStack[exceptionStackPointer - 1])
                 {
-                    exceptionBlockStack[exceptionStackPointer - 1]->funclet_exit_block = lastBB;
+                    exceptionBlockStack[exceptionStackPointer - 1]->funclet_exit_block = lastFuncletBB;
                     if (exceptionHandlerStack[exceptionStackPointer - 1] != nullptr)
                     {
-                        exceptionHandlerStack[exceptionStackPointer - 1]->try_exit_block = lastBB;
+                        exceptionHandlerStack[exceptionStackPointer - 1]->try_exit_block = lastBodyBB;
                     }
                     exceptionStackPointer -= 1;
                 }
@@ -1430,7 +1433,14 @@ bool InterpCompiler::CreateBasicBlocks(CORINFO_METHOD_INFO* methodInfo)
                         exceptionStackPointer += 1;
                     }
                 }
-                lastBB = bb;
+                if ((bb->funclet_type == NOT_A_FUNCLET) || (bb->funclet_type == TRY_ENTRY) || (bb->funclet_type == TRY))
+                {
+                    lastBodyBB = bb;
+                }
+                else
+                {
+                    lastFuncletBB = bb;
+                }
             }
         }
         // TODO: Assert stack pointer not inside any scope
@@ -1611,7 +1621,7 @@ void InterpCompiler::EmitLoadVarHelper(int32_t var, int mode)
         PushInterpType(interpType, clsHnd);
 
     int32_t op = InterpGetMovForType(interpType, true);
-    if ((mode == 1) && ((m_pCBB->funclet_type == FILTER_ENTRY) || (m_pCBB->funclet_type == FILTER)))
+    if ((mode == 1) && (m_pCBB->funclet_type != TRY_ENTRY) && (m_pCBB->funclet_type != TRY) && (m_pCBB->funclet_type != NOT_A_FUNCLET))
     {
         op += (INTOP_LOAD_I4_I1 - INTOP_MOV_I4_I1);
     }
@@ -1650,7 +1660,7 @@ void InterpCompiler::EmitStoreVarHelper(int32_t var, int mode)
 
     m_pStackPointer--;
     int32_t op = InterpGetMovForType(interpType, false);
-    if ((mode == 1) && ((m_pCBB->funclet_type == FILTER_ENTRY) || (m_pCBB->funclet_type == FILTER)))
+    if ((mode == 1) && (m_pCBB->funclet_type != TRY_ENTRY) && (m_pCBB->funclet_type != TRY) && (m_pCBB->funclet_type != NOT_A_FUNCLET))
     {
         // Access of IL variable inside a funclet need to use STORE
         op += (INTOP_STORE_I4_I1 - INTOP_MOV_I4_I1);
@@ -3636,6 +3646,7 @@ retry_emit:
                             int finally_start = (int)clause.HandlerOffset;
                             if ((try_start <= il_offset) && (il_offset < try_end) && (target >= try_end))
                             {
+                                assert((m_pCBB->funclet_type == TRY_ENTRY) || (m_pCBB->funclet_type == TRY));
                                 EmitBranch(INTOP_CALL_FINALLY, finally_start - (int)(m_ip - m_pILCode));
                                 m_pLastNewIns->SetDVar(m_numILVars + finally_index);
                             }
@@ -4006,6 +4017,10 @@ void InterpCompiler::BuildEHInfo()
             InterpBasicBlock* tryEnd = handlerStart->try_exit_block;
             assert (tryEnd != nullptr);
             InterpInst* lastTryInst = tryEnd->pLastIns;
+            while (lastTryInst->flags & INTERP_INST_FLAG_REVERTED)
+            {
+                lastTryInst = lastTryInst->pPrev;
+            }
             int tryEndOffset = lastTryInst->nativeOffset + GetInsLength(lastTryInst);
 
             InterpBasicBlock* handlerEnd = handlerStart->funclet_exit_block;
@@ -4026,18 +4041,18 @@ void InterpCompiler::BuildEHInfo()
             }
             if (m_verbose)
             {
-                printf("Reporting try [IL_%04x(%d), IL_%04x(%d)) ", tryStart->nativeOffset, clause.TryOffset, tryEndOffset, clause.TryLength);
+                printf("Reporting try [IR_%04x(%d), IR_%04x(%d)) ", tryStart->nativeOffset, clause.TryOffset, tryEndOffset, clause.TryLength);
                 if (clause.Flags == CORINFO_EH_CLAUSE_FILTER)
                 {
-                    printf("filter [IL_%04x(%d), IL_%04x(%d)) ", filterStart->nativeOffset, clause.FilterOffset, handlerStart->nativeOffset, clause.HandlerOffset);
+                    printf("filter [IR_%04x(%d), IR_%04x(%d)) ", filterStart->nativeOffset, clause.FilterOffset, handlerStart->nativeOffset, clause.HandlerOffset);
                 }
                 if (clause.Flags == CORINFO_EH_CLAUSE_FINALLY)
                 {
-                    printf("finally [IL_%04x(%d), IL_%04x(%d))\n", handlerStart->nativeOffset, clause.HandlerOffset, handlerEndOffset, clause.HandlerLength);
+                    printf("finally [IR_%04x(%d), IR_%04x(%d))\n", handlerStart->nativeOffset, clause.HandlerOffset, handlerEndOffset, clause.HandlerLength);
                 }
                 else
                 {
-                    printf("catch [IL_%04x(%d), IL_%04x(%d))\n", handlerStart->nativeOffset, clause.HandlerOffset, handlerEndOffset, clause.HandlerLength);
+                    printf("catch [IR_%04x(%d), IR_%04x(%d))\n", handlerStart->nativeOffset, clause.HandlerOffset, handlerEndOffset, clause.HandlerLength);
                 }
             }
             m_compHnd->setEHinfo(i, &clause);

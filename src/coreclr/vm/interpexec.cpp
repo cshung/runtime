@@ -42,7 +42,7 @@ static void InterpBreakpoint()
 
 #define LOCAL_VAR_ADDR(offset,type) ((type*)(stack + (offset)))
 #define LOCAL_VAR(offset,type) (*LOCAL_VAR_ADDR(offset, type))
-#define FRAME_VAR_ADDR(offset,type) ((type*)(frame + (offset)))
+#define FRAME_VAR_ADDR(offset,type) ((type*)(((non_exceptional_finally_count > 0) ? stack : frame) + (offset)))
 #define FRAME_VAR(offset,type) (*FRAME_VAR_ADDR(offset, type))
 // TODO once we have basic EH support
 #define NULL_CHECK(o)
@@ -53,22 +53,6 @@ DWORD_PTR ExecuteInterpretedCode(TransitionBlock* pTransitionBlock, TADDR byteCo
     // The stack arguments are right after the pTransitionBlock
     InterpThreadContext *threadContext = InterpGetThreadContext();
     int8_t *sp = threadContext->pStackPointer;
-
-    if (handlerFrame)
-    {
-        InterpreterFrame interpreterFrame(pTransitionBlock, handlerFrame);
-        int8_t* original = handlerFrame->pStack;
-        int8_t* framePointer = nullptr;
-        if (isFilter)
-        {
-            framePointer = original;
-            handlerFrame->pStack = sp;
-        }
-        DWORD_PTR funcletResult = (DWORD_PTR)InterpExecMethod(&interpreterFrame, handlerFrame, throwable, (const int32_t*)pHandler, framePointer, threadContext);
-        handlerFrame->pStack = original;
-        interpreterFrame.Pop();
-        return funcletResult;
-    }
 
     // This construct ensures that the InterpreterFrame is always stored at a higher address than the
     // InterpMethodContextFrame. This is important for the stack walking code.
@@ -86,17 +70,17 @@ DWORD_PTR ExecuteInterpretedCode(TransitionBlock* pTransitionBlock, TADDR byteCo
 
     frames.interpMethodContextFrame.pStack = sp;
     frames.interpMethodContextFrame.pRetVal = sp;
-    frames.interpMethodContextFrame.startIp = (int32_t*)byteCodeAddr;
+    frames.interpMethodContextFrame.startIp = handlerFrame ? handlerFrame->startIp : (int32_t*)byteCodeAddr;
 
-    InterpExecMethod(&frames.interpreterFrame, &frames.interpMethodContextFrame, throwable, nullptr, nullptr, threadContext);
+    DWORD_PTR funcletResult = (DWORD_PTR)InterpExecMethod(&frames.interpreterFrame, &frames.interpMethodContextFrame, throwable, (const int32_t*)pHandler, handlerFrame ? handlerFrame->pStack : nullptr, threadContext);
 
     frames.interpreterFrame.Pop();
-    return (DWORD_PTR)nullptr;
+    return handlerFrame ? funcletResult : (DWORD_PTR)nullptr;
 }
 
 void* InterpExecMethod(InterpreterFrame *pInterpreterFrame, InterpMethodContextFrame *pFrame, OBJECTREF throwable, const int32_t *ip, int8_t *frame, InterpThreadContext *pThreadContext)
 {
-    bool non_exceptional_finally = false;
+    int non_exceptional_finally_count = 0;
 #if defined(HOST_AMD64) && defined(HOST_WINDOWS)
     pInterpreterFrame->SetInterpExecMethodSSP((TADDR)_rdsspq());
 #endif // HOST_AMD64 && HOST_WINDOWS
@@ -132,7 +116,7 @@ MAIN_LOOP:
 #ifdef DEBUG
         // int offset = (int)(ip - (pFrame->startIp + sizeof(InterpMethod*) / sizeof(int32_t)));
         // printf("Executing %s IR_%04x\n", ((MethodDesc*)pMethod->methodHnd)->GetName(), offset);
-        #endif
+#endif
 
             switch (*ip)
             {
@@ -1249,17 +1233,17 @@ MAIN_LOOP:
                 case INTOP_CALL_FINALLY:
                     // This opcode calls the finally block by putting the return address to a variable and then
                     // jumping to the finally block.
-                    non_exceptional_finally = true;
+                    non_exceptional_finally_count += 1;
                     LOCAL_VAR(ip[1], const int32_t*) = ip + 3;
                     ip += ip[2];
                     break;
 
                 case INTOP_RET_FINALLY:
-                    if (non_exceptional_finally)
+                    if (non_exceptional_finally_count > 0)
                     {
                         // This opcode returns from the finally block by jumping to the return address
                         // stored in the variable.
-                        non_exceptional_finally = false;
+                        non_exceptional_finally_count -= 1;
                         ip = LOCAL_VAR(ip[1], const int32_t*);
                     }
                     else

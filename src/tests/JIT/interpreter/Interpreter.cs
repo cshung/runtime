@@ -124,6 +124,7 @@ public class InterpreterTest
         TestFilterFailedCatchFinallyNested();
         TestFinallyBeforeCatch();
         TestModifyAlias();
+        TestNestedTryFinally();
 
         //
         // Known failure for now
@@ -131,6 +132,35 @@ public class InterpreterTest
         //
         // TestThrowWithinCatch();
         // TestThrowWithinFinally();
+    }
+
+    public static void TestNestedTryFinally()
+    {
+        int x = 0;
+        try
+        {
+            x *= 10;
+            x += 1;
+            try
+            {
+                x *= 10;
+                x += 2;
+            }
+            finally
+            {
+                x *= 10;
+                x += 3;
+            }
+        }
+        finally
+        {
+            x *= 10;
+            x += 4;
+        }
+        if (x != 1234)
+        {
+            throw null;
+        }
     }
 
     public static void TestFinallyBeforeCatch()

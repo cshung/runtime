@@ -79,7 +79,9 @@ enum InterpInstFlags
 {
     INTERP_INST_FLAG_CALL               = 0x01,
     // Flag used internally by the var offset allocator
-    INTERP_INST_FLAG_ACTIVE_CALL        = 0x02
+    INTERP_INST_FLAG_ACTIVE_CALL        = 0x02,
+    // The instruction is not emitted to the final stream
+    INTERP_INST_FLAG_REVERTED           = 0x04
 };
 
 struct InterpInst
