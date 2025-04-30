@@ -110,6 +110,7 @@ public class InterpreterTest
 
     public static void TestExceptionHandling()
     {
+        TestTryFinally();
         TestCatchCurrent();
         TestCatchFinally();
         TestFilterCatchCurrent();
@@ -132,6 +133,26 @@ public class InterpreterTest
         //
         // TestThrowWithinCatch();
         // TestThrowWithinFinally();
+    }
+
+    public static void TestTryFinally()
+    {
+        int x = 0;
+        try
+        {
+            x *= 10;
+            x += 1;
+        }
+        finally
+        {
+            x *= 10;
+            x += 2;
+        }
+
+        if (x != 12)
+        {
+            throw null;
+        }
     }
 
     public static void TestNestedTryFinally()
@@ -182,18 +203,6 @@ public class InterpreterTest
                 x += 3;
             }
         } catch (Exception) {
-
-            // Copied from PowLoop
-            // This small block of code require retry in GenerateCode
-            // and this test that the retry logic is correct even when the retry happen within a funclet
-
-            int n = 5;
-            int nr = 10;
-            long ret = 1;
-            for (int i = 0; i < n; i++)
-                ret *= nr;
-            bool dummy=  (int)ret == 100;
-
             x *= 10;
             x += 4;
         }
@@ -303,6 +312,17 @@ public class InterpreterTest
         }
         finally
         {
+            // Copied from PowLoop
+            // This small block of code require retry in GenerateCode
+            // and this test that the retry logic is correct even when the retry happen within a funclet
+
+            int n = 5;
+            int nr = 10;
+            long ret = 1;
+            for (int i = 0; i < n; i++)
+                ret *= nr;
+            bool dummy=  (int)ret == 100;
+
             x *= 10;
             x += 3;
         }

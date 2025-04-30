@@ -170,6 +170,8 @@ struct InterpBasicBlock
     InterpBasicBlock** funclet_handlers;
     InterpBasicBlock* funclet_exit_block;
     InterpBasicBlock* try_exit_block;
+    int finally_index;
+    int finally_start;
 
     InterpInst *pFirstIns, *pLastIns;
     InterpBasicBlock *pNextBB;
@@ -201,6 +203,7 @@ struct InterpBasicBlock
         funclet_handlers = nullptr;
         funclet_exit_block = nullptr;
         try_exit_block = nullptr;
+        finally_index = -1;
 
         emitState = BBStateNotEmitted;
     }

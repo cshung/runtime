@@ -42,7 +42,7 @@ static void InterpBreakpoint()
 
 #define LOCAL_VAR_ADDR(offset,type) ((type*)(stack + (offset)))
 #define LOCAL_VAR(offset,type) (*LOCAL_VAR_ADDR(offset, type))
-#define FRAME_VAR_ADDR(offset,type) ((type*)(((non_exceptional_finally_count > 0) ? stack : frame) + (offset)))
+#define FRAME_VAR_ADDR(offset,type) ((type*)(frame + (offset)))
 #define FRAME_VAR(offset,type) (*FRAME_VAR_ADDR(offset, type))
 // TODO once we have basic EH support
 #define NULL_CHECK(o)
@@ -1231,20 +1231,50 @@ MAIN_LOOP:
                     return (void*)(int64_t)((LOCAL_VAR(ip[1], int32_t) != 0) ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH);
 
                 case INTOP_CALL_FINALLY:
-                    // This opcode calls the finally block by putting the return address to a variable and then
-                    // jumping to the finally block.
-                    non_exceptional_finally_count += 1;
-                    LOCAL_VAR(ip[1], const int32_t*) = ip + 3;
-                    ip += ip[2];
+                    {
+                        non_exceptional_finally_count += 1;
+                        LOCAL_VAR(ip[1], int8_t*) = frame;
+                        frame = stack;
+
+                        // Save current execution state for when we return from finally
+                        pFrame->ip = ip + 3;
+                        const int32_t* targetIp = ip + ip[2];
+        
+                        // Allocate child frame.
+                        {
+                            InterpMethodContextFrame *pChildFrame = pFrame->pNext;
+                            if (!pChildFrame)
+                            {
+                                pChildFrame = (InterpMethodContextFrame*)alloca(sizeof(InterpMethodContextFrame));
+                                pChildFrame->pNext = NULL;
+                                pFrame->pNext = pChildFrame;
+                            }
+
+                            pChildFrame->ReInit(pFrame, pFrame->startIp, nullptr, stack + pMethod->allocaSize);
+                            pFrame = pChildFrame;
+                        }
+                        assert (((size_t)pFrame->pStack % INTERP_STACK_ALIGNMENT) == 0);
+
+                        stack = pFrame->pStack;
+                        ip = targetIp;
+                        pThreadContext->pStackPointer = stack + pMethod->allocaSize;
+                    }
                     break;
 
                 case INTOP_RET_FINALLY:
                     if (non_exceptional_finally_count > 0)
                     {
-                        // This opcode returns from the finally block by jumping to the return address
-                        // stored in the variable.
+                        // This opcode returns from the finally block
                         non_exceptional_finally_count -= 1;
-                        ip = LOCAL_VAR(ip[1], const int32_t*);
+                        frame = FRAME_VAR(ip[1], int8_t*);
+
+                        pFrame->ip = NULL;
+                        pFrame = pFrame->pParent;
+                        ip = pFrame->ip;
+                        stack = pFrame->pStack;
+                        pFrame->ip = NULL;
+
+                        pThreadContext->pStackPointer = pFrame->pStack + pMethod->allocaSize;
                     }
                     else
                     {
