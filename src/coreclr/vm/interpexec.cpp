@@ -22,6 +22,14 @@ InterpThreadContext::~InterpThreadContext()
     free(pStackStart);
 }
 
+static void InterpStepping(const int32_t *ip, InterpMethodContextFrame *pFrame, int8_t *stack)
+{
+    printf("Raising exception now\n");
+    fflush(stdout);
+    const ULONG_PTR info[3] = {(const ULONG_PTR)ip, (const ULONG_PTR)pFrame, (const ULONG_PTR)stack};
+    RaiseException(12346, 0, 3, info);
+}
+
 static void InterpBreakpoint(const int32_t *ip, InterpMethodContextFrame *pFrame, int8_t *stack)
 {
     printf("Raising exception now\n");
@@ -110,11 +118,24 @@ MAIN_LOOP:
 
 #ifdef DEBUG
             int offset = (int)(ip - (pFrame->startIp + sizeof(InterpMethod*) / sizeof(int32_t)));
-            printf("Executing %s IR_%04x\n", ((MethodDesc*)pMethod->methodHnd)->GetName(), offset);
+            printf("Executing %s IR_%04x STEPPING - %d - %d\n", ((MethodDesc*)pMethod->methodHnd)->GetName(), offset, GetThread()->m_StateNC & Thread::TSNC_DebuggerIsStepping, *ip);
 #endif
 
             switch (*ip)
             {
+                case INTOP_NOP:
+                    if (GetThread()->m_StateNC & Thread::TSNC_DebuggerIsStepping)
+                    {
+                        // On Mono we check if the thread is in a SEQ_POINT opcode, a  SEQ_POINT is generated in a NOP opcode or
+                        // In a CEE_CALLVIRT or 
+                        // In a CEE_CALLI or
+                        // If the stack is empty.
+                        // to avoid checking if the breakpoint is enabled on every opcode.
+                        printf("Stepping in %s IR_%04x\n", ((MethodDesc*)pMethod->methodHnd)->GetName(), offset);
+                        InterpStepping(ip, pFrame, stack);
+                    }
+                    ip++;
+                    break;
                 case INTOP_BREAKPOINT:
                     InterpBreakpoint(ip, pFrame, stack);
                     break;

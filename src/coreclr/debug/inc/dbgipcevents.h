@@ -1291,6 +1291,7 @@ static_assert_no_msg(sizeof(FramePointer) == sizeof(void*));
 
 inline bool IsCloserToLeaf(FramePointer fp1, FramePointer fp2)
 {
+    printf("IsCloserToLeaf: fp1 = %p, fp2 = %p\n", fp1.m_sp, fp2.m_sp);
     return (fp1.m_sp < fp2.m_sp);
 }
 

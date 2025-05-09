@@ -20,6 +20,10 @@
 #include "exinfo.h"
 #endif // FEATURE_EH_FUNCLETS
 
+#ifdef FEATURE_INTERPRETER
+#include "interpexec.h"
+#endif // FEATURE_INTERPRETER
+
 // Get a frame pointer from a RegDisplay.
 // This is mostly used for chains and stub frames (i.e. internal frames), where we don't need an exact
 // frame pointer.  This is why it is okay to use the current SP instead of the caller SP on IA64.
@@ -599,6 +603,7 @@ DebuggerJitInfo * FrameInfo::GetJitInfoFromFrame() const
     // Not all FrameInfo objects correspond to actual code.
     if (HasChainMarker() || HasStubFrame() || (frame != NULL))
     {
+        printf("to saindo no primeiro if %d - %d - %d\n", HasChainMarker(), HasStubFrame(), (frame != NULL));
         return NULL;
     }
 
@@ -607,6 +612,8 @@ DebuggerJitInfo * FrameInfo::GetJitInfoFromFrame() const
     EX_TRY
     {
         _ASSERTE(this->md != NULL);
+        printf("methoddesc2 = %p\n", this->md);
+        printf("ControlPC2 = %p\n", (const BYTE*)GetControlPC(&(this->registers)));
         ji = g_pDebugger->GetJitInfo(this->md, (const BYTE*)GetControlPC(&(this->registers)));
         _ASSERTE(ji == NULL || ji->m_nativeCodeVersion.GetMethodDesc() == this->md);
     }

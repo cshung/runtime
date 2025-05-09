@@ -2629,6 +2629,8 @@ DebuggerJitInfo *Debugger::GetJitInfoFromAddr(TADDR addr)
 
     MethodDesc *fd;
     fd = g_pEEInterface->GetNativeCodeMethodDesc(addr);
+    printf("methoddesc1 = %p\n", fd);
+    printf("ControlPC1 = %p\n", (void*)addr);
     _ASSERTE(fd);
 
     return GetJitInfo(fd, (const BYTE*) addr, NULL);
@@ -10562,8 +10564,14 @@ bool Debugger::HandleIPCEvent(DebuggerIPCEvent * pEvent)
             else
             {
                 DebuggerStepper * pStepper;
-
-                if (pEvent->StepData.IsJMCStop)
+                if (pThread->m_pFrame->GetFrameIdentifier() == FrameIdentifier::InterpreterFrame)
+                {
+                    pStepper = new (interopsafe, nothrow) DebuggerInterpreterStepper(pThread,
+                                                                             pEvent->StepData.rgfMappingStop,
+                                                                             pEvent->StepData.rgfInterceptStop,
+                                                                             pAppDomain);
+                }
+                else if (pEvent->StepData.IsJMCStop)
                 {
                     pStepper = new (interopsafe, nothrow) DebuggerJMCStepper(pThread,
                                                                              pEvent->StepData.rgfMappingStop,

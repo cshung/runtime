@@ -13314,8 +13314,7 @@ PCODE UnsafeJitFunction(PrepareCodeConfig* config,
 #ifdef FEATURE_INTERPRETER
     InterpreterJitManager *interpreterMgr = ExecutionManager::GetInterpreterJitManager();
 
-    LPWSTR interpreterConfig;
-    IfFailThrow(CLRConfig::GetConfigValue(CLRConfig::EXTERNAL_Interpreter, &interpreterConfig));
+    LPWSTR interpreterConfig = (LPWSTR) W("RunInterpreterTests");
 
     if ((interpreterConfig != NULL) && !interpreterMgr->LoadInterpreter())
     {

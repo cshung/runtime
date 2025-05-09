@@ -864,11 +864,12 @@ void InterpCompiler::EmitCode()
         m_pCBB = bb;
         for (InterpInst *ins = bb->pFirstIns; ins != NULL; ins = ins->pNext)
         {
-            if (InterpOpIsEmitNop(ins->opcode))
+            //Should emit NOP in debug build
+            /*if (InterpOpIsEmitNop(ins->opcode)) 
             {
                 ins->flags |= INTERP_INST_FLAG_REVERTED;
                 continue;
-            }
+            }*/
 
             ip = EmitCodeIns(ip, ins, &relocs, enteringFunclet);
             enteringFunclet = false;
@@ -2402,6 +2403,7 @@ retry_emit:
         switch (opcode)
         {
             case CEE_NOP:
+                AddIns(INTOP_NOP);
                 m_ip++;
                 break;
             case CEE_LDC_I4_M1:
@@ -3692,6 +3694,11 @@ retry_emit:
             default:
                 assert(!"NYI: Unexpected opcode");
                 break;
+        }
+        int32_t currentSize = (int32_t)(m_pStackPointer - m_pStackBase);
+        if (currentSize == 0 && opcode != CEE_NOP)
+        {
+            AddIns(INTOP_NOP);
         }
     }
 

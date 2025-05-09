@@ -22,6 +22,10 @@
 #include "../../vm/tailcallhelp.h"
 #include "../../interpreter/intopsshared.h"
 
+#ifdef FEATURE_INTERPRETER
+#include "interpexec.h"
+#endif // FEATURE_INTERPRETER
+
 const char *GetTType( TraceType tt);
 
 #define IsSingleStep(exception) ((exception) == EXCEPTION_SINGLE_STEP)
@@ -3259,8 +3263,10 @@ void DebuggerController::ApplyTraceFlag(Thread *thread)
 
     g_pEEInterface->MarkThreadForDebugStepping(thread, true);
     LOG((LF_CORDB,LL_INFO1000, "DC::ApplyTraceFlag marked thread for debug stepping\n"));
-
-    SetSSFlag(reinterpret_cast<DT_CONTEXT *>(context) ARM_ARG(thread) ARM64_ARG(thread) RISCV64_ARG(thread) LOONGARCH64_ARG(thread));
+    if (thread->m_pFrame->GetFrameIdentifier() != FrameIdentifier::InterpreterFrame)
+    {
+        SetSSFlag(reinterpret_cast<DT_CONTEXT *>(context) ARM_ARG(thread) ARM64_ARG(thread) RISCV64_ARG(thread) LOONGARCH64_ARG(thread));
+    }
 }
 
 //
@@ -4405,7 +4411,7 @@ bool DebuggerController::DispatchNativeException(EXCEPTION_RECORD *pException,
     {
         // Disable SingleStep for all controllers on this thread. This requires the filter context set.
         // This is what would disable the ss-flag when single-stepping over an AV.
-        if (g_patchTableValid && (dwCode != EXCEPTION_SINGLE_STEP))
+        if (g_patchTableValid && (dwCode != EXCEPTION_SINGLE_STEP) && (dwCode != 12346))
         {
             LOG((LF_CORDB, LL_INFO1000, "DC::DNE non-single-step exception; check if any controller has ss turned on\n"));
 
@@ -4471,6 +4477,27 @@ bool DebuggerController::DispatchNativeException(EXCEPTION_RECORD *pException,
                 _ASSERTE(fWasAttached);
             }
             break;
+        case 12346:
+            // This is a special case for the interpreter.  The interpreter will throw a breakpoint exception with this special code
+            LOG(
+                (LF_CORDB, 
+                    LL_INFO1000, 
+                    "DC::DNE Interpreter Stepping hit, redirect into stepping path ip = %p, pFrame = %p, stack = %p\n",
+                     (void*)pException->ExceptionInformation[0],
+                      (void*)pException->ExceptionInformation[1]
+                      , (void*)pException->ExceptionInformation[2]));
+
+            interpreter_original_ip = ip;
+            interpreter_original_sp = dac_cast<PTR_CORDB_ADDRESS_TYPE>(GetSP(pContext));
+            interpreter_original_fp = dac_cast<PTR_CORDB_ADDRESS_TYPE>(GetFP(pContext));
+
+            ip = (CORDB_ADDRESS_TYPE*)pException->ExceptionInformation[0];
+            SetIP(pContext, (PCODE)ip);
+            SetSP(pContext, pException->ExceptionInformation[1]);
+            SetFP(pContext, pException->ExceptionInformation[2]);
+            interpreted = true;
+            // Fallthrough to the stepping case.
+            FALLTHROUGH;
 
         case EXCEPTION_SINGLE_STEP:
             LOG((LF_CORDB, LL_EVERYTHING, "DC::DNE SINGLE_STEP Exception\n"));
@@ -5936,7 +5963,7 @@ bool DebuggerStepper::TrapStep(ControllerStackInfo *info, bool in)
         {
             EnablePolyTraceCall();
         }
-
+        printf("to aqui1\n");
         return false;
     }
 
@@ -5980,7 +6007,7 @@ bool DebuggerStepper::TrapStep(ControllerStackInfo *info, bool in)
                 }
             }
         }
-
+        printf("to aqui2\n");
         return false;
     }
 
@@ -8013,7 +8040,98 @@ bool DebuggerStepper::IsDead()
 {
     return (m_cFuncEvalNesting < 0);
 }
+// *-------------------------------------------------------------------------
+// * DebuggerInterpreterStepper routines
+// *-------------------------------------------------------------------------
+DebuggerInterpreterStepper::DebuggerInterpreterStepper(Thread *thread,
+    CorDebugUnmappedStop rgfMappingStop,
+    CorDebugIntercept interceptStop,
+    AppDomain *appDomain) :
+DebuggerStepper(thread, rgfMappingStop, interceptStop, appDomain)
+{
+    LOG((LF_CORDB, LL_INFO10000, "DInterpreterStepper ctor, this=%p\n", this));
+}
 
+DebuggerInterpreterStepper::~DebuggerInterpreterStepper()
+{
+    LOG((LF_CORDB, LL_INFO10000, "DInterpreterStepper dtor, this=%p\n", this));
+}
+
+bool DebuggerInterpreterStepper::Step(FramePointer fp, bool in,
+    COR_DEBUG_STEP_RANGE *ranges, SIZE_T rangeCount,
+    bool rangeIL)
+{
+    T_CONTEXT localContext;
+    ((PTR_InterpreterFrame)GetThread()->m_pFrame)->SetContextToInterpMethodContextFrame(&localContext);
+    DebuggerJitInfo * dji = g_pDebugger->GetJitInfoFromAddr(GetIP(&localContext));
+    if (dji == NULL)
+    {
+        return false;
+    }
+    printf("cheguei aqui\n");
+    ControllerStackInfo info;
+    info.m_activeFrame.eStubFrameType = STUBFRAME_NONE;
+    info.m_activeFrame.chainReason = CHAIN_NONE;
+    info.m_activeFrame.managed = true;
+    info.m_dbgExecuted = true;
+    info.m_activeFrame.frame = NULL;
+    info.m_activeFrame.md = dji->m_nativeCodeVersion.GetMethodDesc();
+    GetThread()->InitRegDisplay(&info.m_activeFrame.registers, &localContext, true);
+    if (m_range != NULL)
+    {
+        TRACE_FREE(m_range);
+        DeleteInteropSafe(m_range);
+        m_range = NULL;
+        m_rangeCount = 0;
+        m_realRangeCount = 0;
+    }
+
+    if (rangeCount > 0)
+    {
+        if (rangeIL)
+        {
+            // IL ranges supplied, we need to convert them to native ranges.
+            bool fOk = SetRangesFromIL(dji, ranges, rangeCount);
+            if (!fOk)
+            {
+                return false;
+            }
+        }
+        else
+        {
+            // Native ranges, already supplied. Just copy them over.
+            m_range = new (interopsafe) COR_DEBUG_STEP_RANGE[rangeCount];
+
+            if (m_range == NULL)
+            {
+                return false;
+            }
+
+            memcpy(m_range, ranges, sizeof(COR_DEBUG_STEP_RANGE) * rangeCount);
+            m_realRangeCount  = m_rangeCount = rangeCount;
+        }
+        _ASSERTE(m_range != NULL);
+        _ASSERTE(m_rangeCount > 0);
+        _ASSERTE(m_realRangeCount > 0);
+    }
+    else
+    {
+        // !!! ERROR cannot map IL ranges
+        ranges = NULL;
+        rangeCount = 0;
+    }
+    if (!TrapStep(&info, in))
+    {
+        LOG((LF_CORDB,LL_INFO10000,"DS::Step: Did TS\n"));
+        m_stepIn = true;
+        TrapStepNext(&info);
+    }
+    LOG((LF_CORDB,LL_INFO10000,"DS::Step: Did TS,TSO\n"));
+
+    EnableUnwind(m_fp);
+
+    return true;
+}
 // * ------------------------------------------------------------------------
 // * DebuggerJMCStepper routines
 // * ------------------------------------------------------------------------

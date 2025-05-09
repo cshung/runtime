@@ -205,7 +205,7 @@ public:
     // the stepper to step out of an LCG method.  See DebuggerStepper::DetectHandleLCGMethods()
     // for more information.
     void SetReturnFrameWithActiveFrame();
-
+    INDEBUG(bool m_dbgExecuted);
 private:
     // If we don't have a valid context, then use this temp cache.
     CONTEXT                 m_tempContext;
@@ -221,7 +221,7 @@ private:
 
     // Track if this stackwalk actually happened.
     // This is used by the StackTraceTicket(ControllerStackInfo * info) ticket.
-    INDEBUG(bool m_dbgExecuted);
+
 };
 
 #endif // !DACCESS_COMPILE
@@ -938,6 +938,7 @@ enum DEBUGGER_CONTROLLER_TYPE
     DEBUGGER_CONTROLLER_CONTINUABLE_EXCEPTION,
     DEBUGGER_CONTROLLER_DATA_BREAKPOINT,
     DEBUGGER_CONTROLLER_STATIC,
+    DEBUGGER_CONTROLLER_INTERPRETER_STEPPER,
 };
 
 enum TP_RESULT
@@ -1609,7 +1610,7 @@ public:
                     AppDomain *appDomain);
     ~DebuggerStepper();
 
-    bool Step(FramePointer fp, bool in,
+    virtual bool Step(FramePointer fp, bool in,
               COR_DEBUG_STEP_RANGE *range, SIZE_T cRange, bool rangeIL);
     void StepOut(FramePointer fp, StackTraceTicket ticket);
 
@@ -1835,6 +1836,23 @@ protected:
 
 private:
 
+};
+
+class DebuggerInterpreterStepper : public DebuggerStepper
+{
+public:
+    DebuggerInterpreterStepper(Thread *thread,
+        CorDebugUnmappedStop rgfMappingStop,
+        CorDebugIntercept interceptStop,
+        AppDomain *appDomain);
+    ~DebuggerInterpreterStepper();
+
+    virtual DEBUGGER_CONTROLLER_TYPE GetDCType( void )
+    { return DEBUGGER_CONTROLLER_INTERPRETER_STEPPER; }
+
+    protected:
+    virtual bool Step(FramePointer fp, bool in,
+        COR_DEBUG_STEP_RANGE *range, SIZE_T cRange, bool rangeIL);
 };
 
 
